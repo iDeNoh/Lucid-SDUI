@@ -1042,6 +1042,11 @@ function openMediaFullscreen() {
   openFullscreen(state.lightboxB64);
 }
 
+function normalizeParams(str) {
+  // EXIF strings store newlines as literal \n sequences — convert to real newlines
+  return str.replace(/\\n/g, '\n');
+}
+
 function formatInfo(infoStr) {
   if (!infoStr) return '';
   try {
@@ -1051,7 +1056,7 @@ function formatInfo(infoStr) {
       .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
       .join('\n');
   } catch {
-    return infoStr;
+    return normalizeParams(infoStr);
   }
 }
 
@@ -1159,7 +1164,7 @@ async function handlePNGInfo(file) {
 }
 
 function sendPNGInfoToT2i() {
-  const raw = $('pnginfo-result').dataset.raw || '';
+  const raw = normalizeParams($('pnginfo-result').dataset.raw || '');
   const promptMatch = raw.match(/^([\s\S]*?)(?:\nNegative prompt:|\nSteps:)/);
   const negMatch    = raw.match(/Negative prompt:\s*([\s\S]*?)(?:\nSteps:|\n\n)/);
   const stepsMatch  = raw.match(/Steps:\s*(\d+)/);
