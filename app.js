@@ -191,6 +191,7 @@ const state = {
   mediaFilter:  'all',
   mediaEntries: [],
   mediaIndex:   0,
+  lightboxB64:  null,
 };
 
 // ===== Modal zoom/pan state =====
@@ -1000,33 +1001,41 @@ function openMediaLightbox(index) {
   showMediaAt(index);
 }
 
-function showMediaAt(index) {
+async function showMediaAt(index) {
   const n = state.mediaEntries.length;
   if (!n) return;
   index = ((index % n) + n) % n;
-  state.mediaIndex = index;
+  state.mediaIndex  = index;
+  state.lightboxB64 = null;
+
   const { type, fname } = state.mediaEntries[index];
-  $('media-lb-img').src = `/outputs/${type}/${fname}`;
+  $('media-lb-img').src             = `/outputs/${type}/${fname}`;
   $('media-lb-counter').textContent = `${index + 1} / ${n}`;
+  $('media-lb-info').textContent    = '…';
+
+  const [b64Result, metaResult] = await Promise.allSettled([
+    fetch(`/outputs/${type}/${fname}`).then(r => r.blob()).then(blob =>
+      new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(',')[1]);
+        reader.readAsDataURL(blob);
+      })
+    ),
+    fetch(`/outputs/meta?path=${encodeURIComponent(type + '/' + fname)}`).then(r => r.json()),
+  ]);
+
+  if (b64Result.status === 'fulfilled') state.lightboxB64 = b64Result.value;
+
+  const params = metaResult.status === 'fulfilled' ? (metaResult.value.parameters || '') : '';
+  $('media-lb-info').textContent = params || '(no parameters stored)';
 }
 
 function mediaPrev() { showMediaAt(state.mediaIndex - 1); }
 function mediaNext() { showMediaAt(state.mediaIndex + 1); }
 
-async function openMediaFullscreen() {
-  const entry = state.mediaEntries[state.mediaIndex];
-  if (!entry) return;
-  try {
-    const blob = await fetch(`/outputs/${entry.type}/${entry.fname}`).then(r => r.blob());
-    const b64  = await new Promise(res => {
-      const reader = new FileReader();
-      reader.onload = () => res(reader.result.split(',')[1]);
-      reader.readAsDataURL(blob);
-    });
-    openFullscreen(b64);
-  } catch {
-    toast('Could not load image', 'error');
-  }
+function openMediaFullscreen() {
+  if (!state.lightboxB64) { toast('Image still loading', 'info'); return; }
+  openFullscreen(state.lightboxB64);
 }
 
 function formatInfo(infoStr) {
@@ -1433,12 +1442,37 @@ function initEvents() {
   $('media-browser').addEventListener('click', e => { if (e.target === $('media-browser')) closeMediaBrowser(); });
   $$('.media-filter').forEach(btn => btn.addEventListener('click', () => renderMedia(btn.dataset.filter)));
 
-  // Media browser — lightbox
+  // Media browser — lightbox navigation
   $('media-lb-back').addEventListener('click', showMediaGridView);
   $('media-lb-close').addEventListener('click', closeMediaBrowser);
   $('media-lb-prev').addEventListener('click', mediaPrev);
   $('media-lb-next').addEventListener('click', mediaNext);
   $('media-lb-fullscreen').addEventListener('click', openMediaFullscreen);
+
+  // Media browser — lightbox actions
+  $('media-lb-download').addEventListener('click', () => {
+    if (state.lightboxB64) downloadImage(state.lightboxB64);
+  });
+  $('media-lb-use-seed').addEventListener('click', () => {
+    const match = $('media-lb-info').textContent.match(/Seed:\s*(\d+)/);
+    if (match) { $('inp-seed').value = match[1]; toast('Seed applied: ' + match[1], 'info'); }
+    else toast('No seed found in parameters', 'warn');
+  });
+  $('media-lb-send-t2i').addEventListener('click', () => {
+    sendParamsToTxt2img($('media-lb-info').textContent);
+    closeMediaBrowser();
+  });
+  $('media-lb-send-i2i').addEventListener('click', () => {
+    if (!state.lightboxB64) return;
+    sendToImg2img(state.lightboxB64); closeMediaBrowser();
+  });
+  $('media-lb-send-t2v').addEventListener('click', () => {
+    sendToTxtVid(); closeMediaBrowser();
+  });
+  $('media-lb-send-i2v').addEventListener('click', () => {
+    if (!state.lightboxB64) return;
+    sendToVideo(state.lightboxB64); closeMediaBrowser();
+  });
 
   // Lightbox swipe (mobile)
   let lbSwipeX = null;

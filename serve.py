@@ -7,10 +7,12 @@ SDNext UI proxy server
 import http.server
 import urllib.request
 import urllib.error
+import urllib.parse
 import os
 import json
 import base64
 import datetime
+import struct
 import webbrowser
 
 PORT = 8080
@@ -31,10 +33,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         if path.startswith('/sdapi/') or path == '/openapi.json':
             self._proxy()
+        elif path == '/outputs/meta':
+            self._output_meta()
         elif path == '/outputs':
             self._list_outputs()
         else:
             self._static(path)
+
+    def _output_meta(self):
+        qs  = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+        rel = qs.get('path', [''])[0].replace('\\', '/').lstrip('/')
+        outputs_dir = os.path.join(DIR, 'outputs')
+        fp = os.path.normpath(os.path.join(outputs_dir, rel))
+        try:
+            safe = os.path.commonpath([fp, outputs_dir]) == outputs_dir
+        except ValueError:
+            safe = False
+        if not safe or not os.path.isfile(fp):
+            self.send_error(404)
+            return
+        params = self._png_text(fp).get('parameters', '')
+        resp   = json.dumps({'parameters': params}).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
+
+    def _png_text(self, filepath):
+        result = {}
+        try:
+            with open(filepath, 'rb') as f:
+                if f.read(8) != b'\x89PNG\r\n\x1a\n':
+                    return result
+                while True:
+                    buf = f.read(8)
+                    if len(buf) < 8:
+                        break
+                    (length,) = struct.unpack('>I', buf[:4])
+                    ctype = buf[4:8].decode('ascii', errors='ignore')
+                    data  = f.read(length)
+                    f.read(4)  # CRC
+                    if ctype == 'tEXt':
+                        key, _, val = data.partition(b'\x00')
+                        result[key.decode('latin-1', errors='ignore')] = val.decode('latin-1', errors='ignore')
+                    elif ctype == 'IDAT':
+                        break
+        except Exception:
+            pass
+        return result
 
     def _list_outputs(self):
         result = {}

@@ -1043,6 +1043,34 @@ button {
 .media-lb-prev { left: 12px; }
 .media-lb-next { right: 12px; }
 
+.media-lb-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.media-lb-info {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 90px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  margin: 0;
+}
+.media-lb-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* ===== Log panel ===== */
 .log-btn { position: relative; }
 
