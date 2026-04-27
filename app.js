@@ -756,13 +756,39 @@ function sendToVideo(b64) {
   $('vid-use-init').checked = true;
   $('vid-init-area').style.display = 'block';
   switchTab('video');
-  toast('Sent to video', 'success');
+  toast('Sent to img2vid', 'success');
+}
+
+function sendToTxtVid() {
+  $('vid-use-init').checked = false;
+  $('vid-init-area').style.display = 'none';
+  switchTab('video');
+  toast('Switched to txt2vid', 'success');
+}
+
+function sendParamsToTxt2img(infoStr) {
+  const raw = formatInfo(infoStr);
+  const promptMatch  = raw.match(/^([\s\S]+?)(?:\nNegative prompt:|\nSteps:)/);
+  const negMatch     = raw.match(/Negative prompt:\s*([\s\S]+?)(?:\nSteps:|$)/);
+  const seedMatch    = raw.match(/Seed:\s*(\d+)/);
+  const sizeMatch    = raw.match(/Size:\s*(\d+)x(\d+)/);
+  const samplerMatch = raw.match(/Sampler:\s*([^,\n]+)/);
+  if (promptMatch)  $('t2i-prompt').value   = promptMatch[1].trim();
+  if (negMatch)     $('t2i-negative').value  = negMatch[1].trim();
+  if (seedMatch)    $('inp-seed').value      = seedMatch[1];
+  if (sizeMatch)    { $('inp-width').value = sizeMatch[1]; $('inp-height').value = sizeMatch[2]; }
+  if (samplerMatch) {
+    const name = samplerMatch[1].trim();
+    if (Array.from($('sel-sampler').options).some(o => o.value === name)) $('sel-sampler').value = name;
+  }
+  switchTab('txt2img');
+  toast('Parameters applied to txt2img', 'success');
 }
 
 // ===== Modal =====
 
 function applyModalTransform() {
-  $('modal-img').style.transform = `translate(${modalPan.x}px, ${modalPan.y}px) scale(${modalZoom})`;
+  $('modal-fs-img').style.transform = `translate(${modalPan.x}px, ${modalPan.y}px) scale(${modalZoom})`;
   $('modal-viewport').style.cursor = modalZoom > 1 ? (modalDragging ? 'grabbing' : 'grab') : 'default';
 }
 
@@ -848,7 +874,7 @@ function initModalZoom() {
 
   vp.addEventListener('touchend', e => {
     if (e.touches.length === 0) {
-      if (!modalTouchMoved && modalZoom <= 1) { closeModal(); return; }
+      if (!modalTouchMoved && modalZoom <= 1) { closeFullscreen(); return; }
       modalPinchDist0 = 0;
       modalTouchStart = null;
     } else if (e.touches.length === 1) {
@@ -867,7 +893,7 @@ function touchDist(touches) {
 }
 
 function openModal(b64, infoStr, frames, fps) {
-  resetModalZoom();
+  state.currentModalB64 = b64;
   $('modal-img').src = 'data:image/png;base64,' + b64;
 
   if (frames && frames.length > 1) {
@@ -884,13 +910,16 @@ function openModal(b64, infoStr, frames, fps) {
   }
 
   $('modal-info').textContent = formatInfo(infoStr);
-  $('modal-download').onclick = () => downloadImage(b64);
-  $('modal-send-i2i').onclick = () => { sendToImg2img(b64); closeModal(); };
-  $('modal-send-vid').onclick = () => { sendToVideo(b64);   closeModal(); };
-  $('modal-use-seed').onclick = () => {
+  $('modal-fullscreen').onclick = () => openFullscreen(b64);
+  $('modal-download').onclick   = () => downloadImage(b64);
+  $('modal-use-seed').onclick   = () => {
     const info = parseInfo(infoStr);
     if (info.seed != null) { $('inp-seed').value = info.seed; toast('Seed applied: ' + info.seed, 'info'); }
   };
+  $('modal-send-t2i').onclick = () => { sendParamsToTxt2img(infoStr); closeModal(); };
+  $('modal-send-i2i').onclick = () => { sendToImg2img(b64); closeModal(); };
+  $('modal-send-t2v').onclick = () => { sendToTxtVid();     closeModal(); };
+  $('modal-send-i2v').onclick = () => { sendToVideo(b64);   closeModal(); };
 
   $('modal').style.display = 'flex';
 }
@@ -899,6 +928,16 @@ function closeModal() {
   $('modal').style.display = 'none';
   clearInterval(state.animTimer);
   state.animTimer = null;
+}
+
+function openFullscreen(b64) {
+  resetModalZoom();
+  $('modal-fs-img').src = 'data:image/png;base64,' + b64;
+  $('modal-fs').style.display = 'block';
+}
+
+function closeFullscreen() {
+  $('modal-fs').style.display = 'none';
   resetModalZoom();
 }
 
@@ -984,7 +1023,7 @@ async function openMediaFullscreen() {
       reader.onload = () => res(reader.result.split(',')[1]);
       reader.readAsDataURL(blob);
     });
-    openModal(b64, '', null, 0);
+    openFullscreen(b64);
   } catch {
     toast('Could not load image', 'error');
   }
@@ -1363,9 +1402,11 @@ function initEvents() {
   // Modal
   $('modal-close').addEventListener('click', closeModal);
   $('modal-overlay').addEventListener('click', closeModal);
+  $('modal-fs-close').addEventListener('click', closeFullscreen);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if ($('modal').style.display !== 'none') { closeModal(); return; }
+      if ($('modal-fs').style.display  !== 'none') { closeFullscreen();    return; }
+      if ($('modal').style.display     !== 'none') { closeModal();         return; }
       if ($('media-lightbox').style.display !== 'none') { showMediaGridView(); return; }
       closeMediaBrowser();
     }

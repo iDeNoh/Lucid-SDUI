@@ -368,22 +368,31 @@
 
 </div><!-- app -->
 
-<!-- Image modal -->
+<!-- Image viewer card -->
 <div id="modal" class="modal" style="display:none">
   <div class="modal-overlay" id="modal-overlay"></div>
-  <div class="modal-viewport" id="modal-viewport">
+  <div class="modal-card">
+    <button class="modal-close" id="modal-close">✕</button>
     <img id="modal-img" src="" alt="">
-  </div>
-  <button class="modal-close" id="modal-close">✕</button>
-  <div class="modal-bar">
-    <div class="modal-actions">
-      <button id="modal-download" class="btn-sm">⬇ Download</button>
-      <button id="modal-send-i2i" class="btn-sm btn-secondary">→ img2img</button>
-      <button id="modal-send-vid" class="btn-sm btn-secondary">→ video</button>
-      <button id="modal-use-seed" class="btn-sm btn-ghost">Use Seed</button>
-    </div>
     <pre id="modal-info" class="modal-info"></pre>
+    <div class="modal-actions">
+      <button id="modal-fullscreen"  class="btn-sm btn-ghost">⛶ Fullscreen</button>
+      <button id="modal-download"    class="btn-sm btn-ghost">⬇ Download</button>
+      <button id="modal-use-seed"    class="btn-sm btn-ghost">Use Seed</button>
+      <button id="modal-send-t2i"    class="btn-sm btn-secondary">→ txt2img</button>
+      <button id="modal-send-i2i"    class="btn-sm btn-secondary">→ img2img</button>
+      <button id="modal-send-t2v"    class="btn-sm btn-secondary">→ txt2vid</button>
+      <button id="modal-send-i2v"    class="btn-sm btn-secondary">→ img2vid</button>
+    </div>
   </div>
+</div>
+
+<!-- Fullscreen viewer (image only + zoom/pan) -->
+<div id="modal-fs" class="modal-fs" style="display:none">
+  <div class="modal-viewport" id="modal-viewport">
+    <img id="modal-fs-img" src="" alt="">
+  </div>
+  <button class="modal-fs-close" id="modal-fs-close">✕</button>
 </div>
 
 <!-- Media browser -->
