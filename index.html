@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDNext UI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="header-left">
+      <button id="btn-sidebar-toggle" class="btn-icon sidebar-toggle-btn" title="Toggle sidebar">☰</button>
+      <h1>SDNext UI</h1>
+      <div class="connection-bar">
+        <input type="text" id="api-url" value="http://localhost:7860" spellcheck="false" title="SDNext URL (used by the proxy — edit serve.py to change)">
+        <button id="btn-connect" class="btn-sm">Connect</button>
+        <span id="status-dot" class="status-dot" title="Disconnected"></span>
+        <span id="status-text" class="status-text">Disconnected</span>
+        <span id="proxy-badge" class="proxy-badge" style="display:none" title="All API calls route through serve.py">proxy</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button id="btn-refresh" class="btn-sm btn-ghost">⟳ Refresh</button>
+      <button id="btn-history" class="btn-sm btn-ghost" title="Previous generations">History</button>
+      <button id="btn-log-panel" class="btn-sm btn-ghost log-btn" title="View / download log">
+        Log <span id="log-err-count" class="log-err-badge" style="display:none">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Sidebar backdrop (always in DOM, hidden via CSS) -->
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+  <!-- History panel (hidden by default) -->
+  <div id="history-panel" class="history-panel" style="display:none">
+    <div class="history-panel-inner">
+      <div class="history-panel-header">
+        <span class="section-label">Previous Generations</span>
+        <button id="history-close" class="btn-sm btn-ghost">✕</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </div>
+  </div>
+
+  <!-- Log panel (hidden by default) -->
+  <div id="log-panel" class="log-panel" style="display:none">
+    <div class="log-panel-header">
+      <span class="section-label">Session Log</span>
+      <div class="log-panel-actions">
+        <button id="btn-log-download" class="btn-sm btn-secondary">⬇ Download</button>
+        <button id="btn-log-clear" class="btn-sm btn-ghost">Clear</button>
+        <button id="btn-log-close" class="btn-sm btn-ghost">✕</button>
+      </div>
+    </div>
+    <div id="log-entries" class="log-entries"></div>
+  </div>
+
+  <div class="workspace">
+
+    <!-- Left sidebar -->
+    <aside id="sidebar" class="sidebar">
+
+      <div class="sidebar-section">
+        <label class="section-label">Model</label>
+        <select id="sel-model" class="full-width"></select>
+        <button id="btn-load-model" class="btn-sm btn-secondary full-width">Load Model</button>
+        <div id="model-load-status" class="model-status" style="display:none"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">VAE</label>
+        <select id="sel-vae" class="full-width">
+          <option value="">Auto</option>
+        </select>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">Sampler</label>
+        <select id="sel-sampler" class="full-width"></select>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="slider-row">
+          <label>Steps <span class="val-display" id="val-steps">20</span></label>
+          <input type="range" id="range-steps" min="1" max="150" value="20" class="slider">
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="slider-row">
+          <label>CFG Scale <span class="val-display" id="val-cfg">7.0</span></label>
+          <input type="range" id="range-cfg" min="1" max="30" step="0.5" value="7" class="slider">
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">Dimensions</label>
+        <div class="dim-row">
+          <div class="dim-field">
+            <label>W</label>
+            <input type="number" id="inp-width" value="512" step="64" min="64" max="2048">
+          </div>
+          <button id="btn-swap-dims" class="btn-icon" title="Swap">⇄</button>
+          <div class="dim-field">
+            <label>H</label>
+            <input type="number" id="inp-height" value="512" step="64" min="64" max="2048">
+          </div>
+        </div>
+        <div class="preset-dims">
+          <button class="btn-preset" data-w="512" data-h="512">512²</button>
+          <button class="btn-preset" data-w="768" data-h="768">768²</button>
+          <button class="btn-preset" data-w="1024" data-h="1024">1024²</button>
+          <button class="btn-preset" data-w="832" data-h="1216">832×1216</button>
+          <button class="btn-preset" data-w="1216" data-h="832">1216×832</button>
+          <button class="btn-preset" data-w="896" data-h="1152">896×1152</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">Seed</label>
+        <div class="seed-row">
+          <input type="number" id="inp-seed" value="-1" class="inp-seed full-width">
+          <button id="btn-rand-seed" class="btn-icon" title="Random">⚄</button>
+          <button id="btn-last-seed" class="btn-icon" title="Reuse last">↺</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">Batch</label>
+        <div class="batch-row">
+          <div class="field-group">
+            <label>Size</label>
+            <input type="number" id="inp-batch-size" value="1" min="1" max="8">
+          </div>
+          <div class="field-group">
+            <label>Count</label>
+            <input type="number" id="inp-batch-count" value="1" min="1" max="10">
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="section-label">
+          LoRAs
+          <button id="btn-refresh-loras" class="btn-icon btn-inline" title="Refresh LoRAs">⟳</button>
+        </label>
+        <input type="text" id="lora-search" class="full-width" placeholder="Search LoRAs...">
+        <div id="lora-list" class="lora-list"></div>
+      </div>
+
+    </aside>
+
+    <!-- Generation area -->
+    <main class="gen-area">
+
+      <div class="tabs">
+        <button class="tab active" data-tab="txt2img">txt2img</button>
+        <button class="tab" data-tab="img2img">img2img</button>
+        <button class="tab" data-tab="video">video</button>
+        <button class="tab" data-tab="extras">extras</button>
+      </div>
+
+      <!-- txt2img -->
+      <div class="tab-panel active" id="panel-txt2img">
+        <div class="prompt-area">
+          <div class="prompt-header">
+            <label class="section-label">Prompt</label>
+            <button id="t2i-enhance" class="btn-sm btn-ghost" title="Enhance prompt via SDNext">✨ Enhance</button>
+          </div>
+          <textarea id="t2i-prompt" class="prompt-input" placeholder="Enter your prompt…" rows="4"></textarea>
+          <label class="section-label">Negative Prompt</label>
+          <textarea id="t2i-negative" class="prompt-input neg-prompt" placeholder="Things to avoid…" rows="3"></textarea>
+        </div>
+        <div class="hires-section">
+          <label class="toggle-label">
+            <input type="checkbox" id="t2i-hires"> Hi-Res Fix
+          </label>
+          <div class="hires-params" id="hires-params" style="display:none">
+            <div class="slider-row">
+              <label>Upscale Factor <span class="val-display" id="val-hires-scale">2.0</span></label>
+              <input type="range" id="range-hires-scale" min="1" max="4" step="0.1" value="2" class="slider">
+            </div>
+            <div class="slider-row">
+              <label>Denoise <span class="val-display" id="val-hires-denoise">0.5</span></label>
+              <input type="range" id="range-hires-denoise" min="0" max="1" step="0.01" value="0.5" class="slider">
+            </div>
+            <select id="sel-hires-upscaler" class="full-width">
+              <option value="Latent">Latent</option>
+              <option value="Lanczos">Lanczos</option>
+              <option value="ESRGAN_4x">ESRGAN 4x</option>
+              <option value="R-ESRGAN 4x+">R-ESRGAN 4x+</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- img2img -->
+      <div class="tab-panel" id="panel-img2img">
+        <div id="i2i-dropzone" class="dropzone">
+          <span>Drop image here or click to upload</span>
+          <input type="file" id="i2i-file" accept="image/*" style="display:none">
+        </div>
+        <div id="i2i-preview" class="init-preview" style="display:none">
+          <img id="i2i-preview-img" src="" alt="Init image">
+          <button id="i2i-clear" class="btn-clear">✕</button>
+        </div>
+        <div class="prompt-area">
+          <label class="section-label">Prompt</label>
+          <textarea id="i2i-prompt" class="prompt-input" placeholder="Enter your prompt…" rows="4"></textarea>
+          <label class="section-label">Negative Prompt</label>
+          <textarea id="i2i-negative" class="prompt-input neg-prompt" placeholder="Things to avoid…" rows="3"></textarea>
+        </div>
+        <div class="slider-row">
+          <label>Denoising Strength <span class="val-display" id="val-denoise">0.75</span></label>
+          <input type="range" id="range-denoise" min="0" max="1" step="0.01" value="0.75" class="slider">
+        </div>
+        <div class="resize-mode-row">
+          <label class="section-label">Resize Mode</label>
+          <select id="sel-resize-mode" class="full-width">
+            <option value="0">Just Resize</option>
+            <option value="1">Crop and Resize</option>
+            <option value="2" selected>Resize and Fill</option>
+            <option value="3">Just Resize (Latent Upscale)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Video -->
+      <div class="tab-panel" id="panel-video">
+        <div class="info-box">
+          Select a video-capable model from the sidebar (e.g. <strong>zeroscope</strong>) then generate. Video models return frames displayed as a sequence below.
+        </div>
+        <label class="toggle-label">
+          <input type="checkbox" id="vid-use-init"> Use Init Image (img2vid)
+        </label>
+        <div id="vid-init-area" style="display:none">
+          <div id="vid-dropzone" class="dropzone">
+            <span>Drop init image here or click to upload</span>
+            <input type="file" id="vid-file" accept="image/*" style="display:none">
+          </div>
+          <div id="vid-preview" class="init-preview" style="display:none">
+            <img id="vid-preview-img" src="" alt="Init image">
+            <button id="vid-clear" class="btn-clear">✕</button>
+          </div>
+        </div>
+        <div class="prompt-area">
+          <label class="section-label">Prompt</label>
+          <textarea id="vid-prompt" class="prompt-input" placeholder="Describe the video content…" rows="4"></textarea>
+          <label class="section-label">Negative Prompt</label>
+          <textarea id="vid-negative" class="prompt-input neg-prompt" placeholder="Things to avoid…" rows="2"></textarea>
+        </div>
+        <div class="video-params">
+          <div class="slider-row">
+            <label>Frames <span class="val-display" id="val-frames">24</span></label>
+            <input type="range" id="range-frames" min="4" max="120" step="4" value="24" class="slider">
+          </div>
+          <div class="slider-row">
+            <label>FPS (preview only) <span class="val-display" id="val-fps">8</span></label>
+            <input type="range" id="range-fps" min="1" max="60" step="1" value="8" class="slider">
+          </div>
+        </div>
+      </div>
+
+      <!-- Extras -->
+      <div class="tab-panel" id="panel-extras">
+        <div class="extras-group">
+          <h3>PNG Metadata Reader</h3>
+          <div id="pnginfo-dropzone" class="dropzone">
+            <span>Drop a PNG to extract its generation parameters</span>
+            <input type="file" id="pnginfo-file" accept="image/png" style="display:none">
+          </div>
+          <div id="pnginfo-result" class="pnginfo-result" style="display:none">
+            <pre id="pnginfo-text"></pre>
+            <div class="pnginfo-actions">
+              <button id="btn-send-t2i" class="btn-sm btn-secondary">→ txt2img</button>
+              <button id="btn-copy-info" class="btn-sm btn-ghost">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="extras-group">
+          <h3>Caption / Tag Image</h3>
+          <div id="caption-dropzone" class="dropzone">
+            <span>Drop an image to caption or tag</span>
+            <input type="file" id="caption-file" accept="image/*" style="display:none">
+          </div>
+          <div id="caption-preview" class="init-preview" style="display:none">
+            <img id="caption-preview-img" src="" alt="">
+            <button id="caption-clear" class="btn-clear">✕</button>
+          </div>
+          <div class="caption-controls">
+            <button id="btn-caption" class="btn-sm btn-secondary">Caption (CLIP)</button>
+            <button id="btn-tag" class="btn-sm btn-secondary">Tag (Tagger)</button>
+            <button id="btn-send-caption-prompt" class="btn-sm btn-ghost" style="display:none">→ prompt</button>
+          </div>
+          <div id="caption-result" class="pnginfo-result" style="display:none">
+            <pre id="caption-text"></pre>
+          </div>
+        </div>
+
+        <div class="extras-group">
+          <h3>Upscale Image</h3>
+          <div id="upscale-dropzone" class="dropzone">
+            <span>Drop an image to upscale</span>
+            <input type="file" id="upscale-file" accept="image/*" style="display:none">
+          </div>
+          <div id="upscale-preview" class="init-preview" style="display:none">
+            <img id="upscale-preview-img" src="" alt="">
+            <button id="upscale-clear" class="btn-clear">✕</button>
+          </div>
+          <div class="extras-params">
+            <div class="field-group">
+              <label>Upscaler 1</label>
+              <select id="sel-upscaler1" class="full-width"></select>
+            </div>
+            <div class="slider-row">
+              <label>Scale <span class="val-display" id="val-upscale">2.0</span></label>
+              <input type="range" id="range-upscale" min="1" max="8" step="0.5" value="2" class="slider">
+            </div>
+          </div>
+          <button id="btn-upscale" class="btn-sm btn-secondary full-width">Upscale</button>
+        </div>
+      </div>
+
+      <!-- Generate controls -->
+      <div class="gen-controls">
+        <button id="btn-generate" class="btn-generate">Generate <span class="key-hint">Ctrl+Enter</span></button>
+        <button id="btn-interrupt" class="btn-interrupt" style="display:none">■ Stop</button>
+        <button id="btn-skip" class="btn-sm btn-ghost" style="display:none" title="Skip to next image in batch">Skip</button>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-area" style="display:none">
+        <div class="progress-bar-track">
+          <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+        </div>
+        <div class="progress-info">
+          <span id="progress-text">Starting…</span>
+          <span id="progress-eta"></span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Output gallery -->
+    <div class="output-panel">
+      <div class="output-header">
+        <span class="section-label">Output</span>
+        <div class="output-header-actions">
+          <span id="gallery-count" class="gallery-count"></span>
+          <button id="btn-clear-gallery" class="btn-sm btn-ghost">Clear</button>
+        </div>
+      </div>
+      <!-- Live preview shown while generating -->
+      <div id="live-preview" class="live-preview-panel" style="display:none">
+        <div id="live-preview-placeholder" class="live-preview-placeholder">
+          <div class="live-preview-spinner"></div>
+          <span>Waiting for first frame…</span>
+        </div>
+        <img id="live-preview-img" src="" alt="Preview" style="display:none">
+      </div>
+      <div id="gallery" class="gallery"></div>
+    </div>
+
+  </div><!-- workspace -->
+
+</div><!-- app -->
+
+<!-- Image modal -->
+<div id="modal" class="modal" style="display:none">
+  <div class="modal-overlay" id="modal-overlay"></div>
+  <div class="modal-content">
+    <button class="modal-close" id="modal-close">✕</button>
+    <img id="modal-img" src="" alt="Generated image">
+    <div class="modal-actions">
+      <button id="modal-download" class="btn-sm">⬇ Download</button>
+      <button id="modal-send-i2i" class="btn-sm btn-secondary">→ img2img</button>
+      <button id="modal-send-vid" class="btn-sm btn-secondary">→ video</button>
+      <button id="modal-use-seed" class="btn-sm btn-ghost">Use Seed</button>
+    </div>
+    <pre id="modal-info" class="modal-info"></pre>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
