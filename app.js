@@ -187,8 +187,10 @@ const state = {
   animFrames: [],
   animIdx:    0,
   genHistory: [],
-  mediaData:  {},
-  mediaFilter: 'all',
+  mediaData:    {},
+  mediaFilter:  'all',
+  mediaEntries: [],
+  mediaIndex:   0,
 };
 
 // ===== Modal zoom/pan state =====
@@ -904,6 +906,7 @@ function closeModal() {
 
 function openMediaBrowser() {
   $('media-browser').style.display = 'flex';
+  showMediaGridView();
   $('media-grid').innerHTML = '<div class="media-empty">Loading…</div>';
   fetch('/outputs')
     .then(r => r.json())
@@ -913,6 +916,12 @@ function openMediaBrowser() {
 
 function closeMediaBrowser() {
   $('media-browser').style.display = 'none';
+  showMediaGridView();
+}
+
+function showMediaGridView() {
+  $('media-grid-view').style.display = 'flex';
+  $('media-lightbox').style.display = 'none';
 }
 
 function renderMedia(filter) {
@@ -927,27 +936,49 @@ function renderMedia(filter) {
     files.forEach(fname => entries.push({ type, fname }));
   }
   entries.sort((a, b) => b.fname.localeCompare(a.fname));
+  state.mediaEntries = entries;
 
   if (!entries.length) {
     grid.innerHTML = '<div class="media-empty">No images.</div>';
     return;
   }
 
-  for (const { type, fname } of entries) {
+  entries.forEach(({ type, fname }, idx) => {
     const item = document.createElement('div');
     item.className = 'media-item';
     const img = document.createElement('img');
     img.src     = `/outputs/${type}/${fname}`;
     img.loading = 'lazy';
     item.appendChild(img);
-    item.addEventListener('click', () => loadMediaImage(type, fname));
+    item.addEventListener('click', () => openMediaLightbox(idx));
     grid.appendChild(item);
-  }
+  });
 }
 
-async function loadMediaImage(type, fname) {
+function openMediaLightbox(index) {
+  $('media-grid-view').style.display = 'none';
+  $('media-lightbox').style.display = 'flex';
+  showMediaAt(index);
+}
+
+function showMediaAt(index) {
+  const n = state.mediaEntries.length;
+  if (!n) return;
+  index = ((index % n) + n) % n;
+  state.mediaIndex = index;
+  const { type, fname } = state.mediaEntries[index];
+  $('media-lb-img').src = `/outputs/${type}/${fname}`;
+  $('media-lb-counter').textContent = `${index + 1} / ${n}`;
+}
+
+function mediaPrev() { showMediaAt(state.mediaIndex - 1); }
+function mediaNext() { showMediaAt(state.mediaIndex + 1); }
+
+async function openMediaFullscreen() {
+  const entry = state.mediaEntries[state.mediaIndex];
+  if (!entry) return;
   try {
-    const blob = await fetch(`/outputs/${type}/${fname}`).then(r => r.blob());
+    const blob = await fetch(`/outputs/${entry.type}/${entry.fname}`).then(r => r.blob());
     const b64  = await new Promise(res => {
       const reader = new FileReader();
       reader.onload = () => res(reader.result.split(',')[1]);
@@ -1332,7 +1363,17 @@ function initEvents() {
   // Modal
   $('modal-close').addEventListener('click', closeModal);
   $('modal-overlay').addEventListener('click', closeModal);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeMediaBrowser(); } });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if ($('modal').style.display !== 'none') { closeModal(); return; }
+      if ($('media-lightbox').style.display !== 'none') { showMediaGridView(); return; }
+      closeMediaBrowser();
+    }
+    if ($('media-lightbox').style.display !== 'none') {
+      if (e.key === 'ArrowLeft')  mediaPrev();
+      if (e.key === 'ArrowRight') mediaNext();
+    }
+  });
 
   // Gallery clear
   $('btn-clear-gallery').addEventListener('click', () => {
@@ -1345,11 +1386,28 @@ function initEvents() {
   $('history-close').addEventListener('click', closeHistoryPanel);
   $('history-panel').addEventListener('click', e => { if (e.target === $('history-panel')) closeHistoryPanel(); });
 
-  // Media browser
+  // Media browser — grid view
   $('btn-media').addEventListener('click', openMediaBrowser);
   $('media-close').addEventListener('click', closeMediaBrowser);
   $('media-browser').addEventListener('click', e => { if (e.target === $('media-browser')) closeMediaBrowser(); });
   $$('.media-filter').forEach(btn => btn.addEventListener('click', () => renderMedia(btn.dataset.filter)));
+
+  // Media browser — lightbox
+  $('media-lb-back').addEventListener('click', showMediaGridView);
+  $('media-lb-close').addEventListener('click', closeMediaBrowser);
+  $('media-lb-prev').addEventListener('click', mediaPrev);
+  $('media-lb-next').addEventListener('click', mediaNext);
+  $('media-lb-fullscreen').addEventListener('click', openMediaFullscreen);
+
+  // Lightbox swipe (mobile)
+  let lbSwipeX = null;
+  $('media-lb-stage').addEventListener('touchstart', e => { lbSwipeX = e.touches[0].clientX; }, { passive: true });
+  $('media-lb-stage').addEventListener('touchend', e => {
+    if (lbSwipeX === null) return;
+    const dx = e.changedTouches[0].clientX - lbSwipeX;
+    if (Math.abs(dx) > 48) dx > 0 ? mediaPrev() : mediaNext();
+    lbSwipeX = null;
+  });
 
   // Log panel
   $('btn-log-panel').addEventListener('click', () => {

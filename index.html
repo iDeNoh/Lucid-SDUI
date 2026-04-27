@@ -389,18 +389,38 @@
 <!-- Media browser -->
 <div id="media-browser" class="media-browser" style="display:none">
   <div class="media-browser-inner">
-    <div class="media-browser-header">
-      <span class="section-label">Media</span>
-      <div id="media-filters" class="media-filters">
-        <button class="media-filter active" data-filter="all">All</button>
-        <button class="media-filter" data-filter="txt2img">txt2img</button>
-        <button class="media-filter" data-filter="img2img">img2img</button>
-        <button class="media-filter" data-filter="video">video</button>
-        <button class="media-filter" data-filter="upscale">upscale</button>
+
+    <!-- Grid view -->
+    <div id="media-grid-view" class="media-grid-view">
+      <div class="media-browser-header">
+        <span class="section-label">Media</span>
+        <div id="media-filters" class="media-filters">
+          <button class="media-filter active" data-filter="all">All</button>
+          <button class="media-filter" data-filter="txt2img">txt2img</button>
+          <button class="media-filter" data-filter="img2img">img2img</button>
+          <button class="media-filter" data-filter="video">video</button>
+          <button class="media-filter" data-filter="upscale">upscale</button>
+        </div>
+        <button id="media-close" class="btn-sm btn-ghost">✕</button>
       </div>
-      <button id="media-close" class="btn-sm btn-ghost">✕</button>
+      <div id="media-grid" class="media-grid"></div>
     </div>
-    <div id="media-grid" class="media-grid"></div>
+
+    <!-- Lightbox view -->
+    <div id="media-lightbox" class="media-lightbox" style="display:none">
+      <div class="media-lb-header">
+        <button id="media-lb-back" class="btn-sm btn-ghost">← Back</button>
+        <span id="media-lb-counter" class="media-lb-counter"></span>
+        <button id="media-lb-fullscreen" class="btn-sm btn-ghost">Fullscreen</button>
+        <button id="media-lb-close" class="btn-sm btn-ghost">✕</button>
+      </div>
+      <div class="media-lb-stage" id="media-lb-stage">
+        <button class="media-lb-arrow media-lb-prev" id="media-lb-prev">❮</button>
+        <img id="media-lb-img" src="" alt="">
+        <button class="media-lb-arrow media-lb-next" id="media-lb-next">❯</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
