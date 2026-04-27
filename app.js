@@ -1026,8 +1026,12 @@ async function showMediaAt(index) {
 
   if (b64Result.status === 'fulfilled') state.lightboxB64 = b64Result.value;
 
-  const params = metaResult.status === 'fulfilled' ? (metaResult.value.parameters || '') : '';
-  $('media-lb-info').textContent = params || '(no parameters stored)';
+  if (metaResult.status === 'fulfilled') {
+    $('media-lb-info').textContent = metaResult.value.parameters || '(no parameters stored)';
+  } else {
+    Log.warn('media', 'meta fetch failed', metaResult.reason);
+    $('media-lb-info').textContent = '(meta fetch failed)';
+  }
 }
 
 function mediaPrev() { showMediaAt(state.mediaIndex - 1); }

@@ -52,7 +52,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not safe or not os.path.isfile(fp):
             self.send_error(404)
             return
-        params = self._png_text(fp).get('parameters', '')
+        meta   = self._png_text(fp)
+        params = meta.get('parameters', '')
         resp   = json.dumps({'parameters': params}).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -61,6 +62,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
     def _png_text(self, filepath):
+        # Pillow handles tEXt, iTXt, zTXt, and EXIF correctly
+        try:
+            from PIL import Image
+            with Image.open(filepath) as img:
+                result = {k: str(v) for k, v in img.info.items() if isinstance(v, (str, bytes))}
+                if 'parameters' not in result:
+                    # SDNext stores params in EXIF ExifIFD sub-directory (tag 34665 pointer)
+                    try:
+                        exif = img.getexif()
+                        # Check main IFD tags 270 (ImageDescription) and 37510 (UserComment)
+                        # then the ExifIFD sub-directory (tag 34665) for the same tags
+                        def _extract_user_comment(uc):
+                            if isinstance(uc, bytes):
+                                if len(uc) > 8:
+                                    prefix, text = uc[:8], uc[8:]
+                                    if prefix[:7] == b'UNICODE':
+                                        for enc in ('utf-16-le', 'utf-16-be', 'utf-16'):
+                                            try:
+                                                decoded = text.decode(enc).rstrip('\x00').strip()
+                                                # Reject if mostly non-ASCII (wrong byte order)
+                                                printable = sum(1 for c in decoded if ord(c) < 128)
+                                                if decoded and printable / len(decoded) > 0.7:
+                                                    return decoded
+                                            except Exception:
+                                                continue
+                                    return text.decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                                return uc.decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                            # Pillow may return a pre-decoded string; strip embedded nulls
+                            return str(uc).replace('\x00', '').strip() if uc else ''
+                        def _extract_desc(d):
+                            if isinstance(d, bytes):
+                                return d.decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                            return str(d).strip() if d else ''
+                        params = ''
+                        for ifd in (exif, exif.get_ifd(34665)):
+                            params = (
+                                _extract_user_comment(ifd.get(37510)) or
+                                _extract_desc(ifd.get(270))
+                            )
+                            if params:
+                                break
+                        if params:
+                            result['parameters'] = params
+                    except Exception:
+                        pass
+                return result
+        except Exception:
+            pass
+        # Manual fallback: read tEXt and iTXt chunks
         result = {}
         try:
             with open(filepath, 'rb') as f:
@@ -77,7 +127,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if ctype == 'tEXt':
                         key, _, val = data.partition(b'\x00')
                         result[key.decode('latin-1', errors='ignore')] = val.decode('latin-1', errors='ignore')
-                    elif ctype == 'IDAT':
+                    elif ctype == 'iTXt':
+                        try:
+                            n1   = data.index(b'\x00')
+                            key  = data[:n1].decode('utf-8', errors='ignore')
+                            rest = data[n1 + 1:]
+                            comp = rest[0] if rest else 0
+                            rest = rest[2:]          # skip comp_flag + comp_method
+                            n2   = rest.index(b'\x00')
+                            rest = rest[n2 + 1:]     # skip language tag
+                            n3   = rest.index(b'\x00')
+                            text = rest[n3 + 1:]
+                            if comp == 1:
+                                import zlib
+                                text = zlib.decompress(text)
+                            result[key] = text.decode('utf-8', errors='ignore')
+                        except Exception:
+                            pass
+                    elif ctype == 'IEND':
                         break
         except Exception:
             pass
