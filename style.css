@@ -462,17 +462,7 @@ button {
 .prompt-input { width: 100%; resize: vertical; min-height: 68px; font-size: 13px; line-height: 1.5; }
 .neg-prompt   { min-height: 52px; }
 
-/* Hi-res */
-.hires-section {
-  padding: 8px 10px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.hires-params { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+.hires-params { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
 
 .toggle-label {
   display: flex;
@@ -1213,9 +1203,6 @@ button {
 
   /* Batch stacked */
   .batch-row { flex-direction: column; gap: 8px; }
-
-  /* Hi-res section */
-  .hires-section { padding: 8px; }
 
   /* Live preview */
   .live-preview-panel { max-height: 220px; min-height: 120px; }

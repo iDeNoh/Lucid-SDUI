@@ -379,9 +379,10 @@ function populateVAEs(vaes, current) {
 }
 
 function populateUpscalers(upscalers) {
-  const sel = $('sel-upscaler1');
-  sel.innerHTML = '';
-  upscalers.forEach(u => sel.add(new Option(u.name, u.name)));
+  [$('sel-upscaler1'), $('sel-hires-upscaler')].forEach(sel => {
+    sel.innerHTML = '';
+    upscalers.forEach(u => sel.add(new Option(u.name, u.name)));
+  });
 }
 
 async function loadLoras() {

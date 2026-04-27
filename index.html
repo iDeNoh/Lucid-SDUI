@@ -143,6 +143,23 @@
       </div>
 
       <div class="sidebar-section">
+        <label class="toggle-label">
+          <input type="checkbox" id="t2i-hires"> Hi-Res Fix
+        </label>
+        <div class="hires-params" id="hires-params" style="display:none">
+          <div class="slider-row">
+            <label>Upscale Factor <span class="val-display" id="val-hires-scale">2.0</span></label>
+            <input type="range" id="range-hires-scale" min="1" max="4" step="0.1" value="2" class="slider">
+          </div>
+          <div class="slider-row">
+            <label>Denoise <span class="val-display" id="val-hires-denoise">0.5</span></label>
+            <input type="range" id="range-hires-denoise" min="0" max="1" step="0.01" value="0.5" class="slider">
+          </div>
+          <select id="sel-hires-upscaler" class="full-width"></select>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
         <label class="section-label">
           LoRAs
           <button id="btn-refresh-loras" class="btn-icon btn-inline" title="Refresh LoRAs">⟳</button>
@@ -173,27 +190,6 @@
           <textarea id="t2i-prompt" class="prompt-input" placeholder="Enter your prompt…" rows="4"></textarea>
           <label class="section-label">Negative Prompt</label>
           <textarea id="t2i-negative" class="prompt-input neg-prompt" placeholder="Things to avoid…" rows="3"></textarea>
-        </div>
-        <div class="hires-section">
-          <label class="toggle-label">
-            <input type="checkbox" id="t2i-hires"> Hi-Res Fix
-          </label>
-          <div class="hires-params" id="hires-params" style="display:none">
-            <div class="slider-row">
-              <label>Upscale Factor <span class="val-display" id="val-hires-scale">2.0</span></label>
-              <input type="range" id="range-hires-scale" min="1" max="4" step="0.1" value="2" class="slider">
-            </div>
-            <div class="slider-row">
-              <label>Denoise <span class="val-display" id="val-hires-denoise">0.5</span></label>
-              <input type="range" id="range-hires-denoise" min="0" max="1" step="0.01" value="0.5" class="slider">
-            </div>
-            <select id="sel-hires-upscaler" class="full-width">
-              <option value="Latent">Latent</option>
-              <option value="Lanczos">Lanczos</option>
-              <option value="ESRGAN_4x">ESRGAN 4x</option>
-              <option value="R-ESRGAN 4x+">R-ESRGAN 4x+</option>
-            </select>
-          </div>
         </div>
       </div>
 
