@@ -1177,7 +1177,7 @@ function openHistoryPanel() {
       const item = document.createElement('div');
       item.className = 'history-item';
       item.innerHTML = `
-        <img class="history-thumb" src="data:image/png;base64,${entry.thumb}" alt="">
+        <img class="history-thumb" src="${/^[A-Za-z0-9+/]+=*$/.test(entry.thumb || '') ? 'data:image/png;base64,' + entry.thumb : ''}" alt="">
         <div class="history-meta">
           <div class="history-prompt">${escapeHtml((entry.params.prompt || '').slice(0, 120))}</div>
           <div class="history-details">

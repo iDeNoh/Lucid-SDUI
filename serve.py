@@ -68,7 +68,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path in ('/', ''):
             path = '/index.html'
         fp = os.path.normpath(os.path.join(DIR, path.lstrip('/')))
-        if not fp.startswith(DIR) or not os.path.isfile(fp):
+        if os.path.commonpath([fp, DIR]) != DIR or not os.path.isfile(fp):
             self.send_error(404)
             return
         ext = os.path.splitext(fp)[1].lower()
