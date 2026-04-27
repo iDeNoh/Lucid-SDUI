@@ -191,8 +191,9 @@ const state = {
 
 // ===== Generation History =====
 
-const HISTORY_KEY = 'sdnext-ui-history';
-const HISTORY_MAX = 30;
+const HISTORY_KEY  = 'sdnext-ui-history';
+const HISTORY_MAX  = 30;
+const SAVE_KEY     = 'sdnext-ui-save';
 
 function loadHistory() {
   try { state.genHistory = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
@@ -219,6 +220,20 @@ function recordGenHistory(tab, params, result) {
   };
   delete entry.params.init_images;
   saveHistory(entry);
+}
+
+// ===== Save to disk =====
+
+async function saveImageToDisk(b64, type) {
+  try {
+    await fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, image: b64 }),
+    });
+  } catch (e) {
+    Log.warn('Save', 'Could not save image to disk', e.message);
+  }
 }
 
 // ===== DOM helpers =====
@@ -498,7 +513,7 @@ async function generate() {
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
     const count   = result.images?.length ?? 0;
     Log.info('Generate', `Done — ${count} image(s) in ${elapsed}s`);
-    handleResult(result, tab === 'video' ? +$('range-fps').value : 0);
+    handleResult(result, tab === 'video' ? +$('range-fps').value : 0, tab);
     recordGenHistory(tab, params, result);
   } catch (e) {
     Log.error('Generate', 'Generation failed', e.message);
@@ -587,7 +602,7 @@ async function pollProgress() {
 
 // ===== Result handling =====
 
-function handleResult(result, fps = 0) {
+function handleResult(result, fps = 0, type = 'txt2img') {
   const images = result.images || [];
   if (!images.length) { toast('No images returned', 'warn'); return; }
 
@@ -596,13 +611,17 @@ function handleResult(result, fps = 0) {
   if (info.seed != null && info.seed >= 0) state.lastSeed = info.seed;
 
   const infoStr = result.info || '';
+  const saving  = $('save-to-disk')?.checked;
 
   if (fps > 0 && images.length > 1) {
-    // Video — add as animation entry
     addVideoToGallery(images, infoStr, fps);
+    if (saving) images.forEach(img => saveImageToDisk(img, 'video'));
     toast(`Generated ${images.length} frames`, 'success');
   } else {
-    images.forEach(img => addImageToGallery(img, infoStr));
+    images.forEach(img => {
+      addImageToGallery(img, infoStr);
+      if (saving) saveImageToDisk(img, type);
+    });
     toast(`Generated ${images.length} image(s) — seed ${info.seed ?? '?'}`, 'success');
   }
 
@@ -962,6 +981,7 @@ async function runUpscale() {
     const r = await api.extraSingle(params);
     if (r.image) {
       addImageToGallery(r.image, '');
+      if ($('save-to-disk')?.checked) saveImageToDisk(r.image, 'upscale');
       updateGalleryCount();
       toast('Upscale complete', 'success');
     }
@@ -1244,6 +1264,11 @@ function escapeHtml(str) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
+  const saveCb = $('save-to-disk');
+  if (saveCb) {
+    saveCb.checked = localStorage.getItem(SAVE_KEY) === '1';
+    saveCb.addEventListener('change', () => localStorage.setItem(SAVE_KEY, saveCb.checked ? '1' : '0'));
+  }
   initMobile();
   initEvents();
   connect();

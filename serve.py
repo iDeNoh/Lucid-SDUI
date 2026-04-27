@@ -8,6 +8,9 @@ import http.server
 import urllib.request
 import urllib.error
 import os
+import json
+import base64
+import datetime
 import webbrowser
 
 PORT = 8080
@@ -32,10 +35,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._static(path)
 
     def do_POST(self):
-        if self.path.startswith('/sdapi/'):
+        if self.path == '/save':
+            self._save()
+        elif self.path.startswith('/sdapi/'):
             self._proxy()
         else:
             self.send_error(405)
+
+    def _save(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body   = self.rfile.read(length)
+        try:
+            data = json.loads(body)
+        except Exception:
+            self.send_error(400, 'Bad JSON')
+            return
+
+        img_type = data.get('type', 'txt2img')
+        # Allow only safe folder names
+        img_type = ''.join(c for c in img_type if c.isalnum() or c == '_') or 'output'
+        b64      = data.get('image', '')
+
+        out_dir = os.path.join(DIR, 'outputs', img_type)
+        os.makedirs(out_dir, exist_ok=True)
+
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        n  = 1
+        while True:
+            fname = f'{ts}_{n:03d}.png'
+            if not os.path.exists(os.path.join(out_dir, fname)):
+                break
+            n += 1
+
+        with open(os.path.join(out_dir, fname), 'wb') as f:
+            f.write(base64.b64decode(b64))
+
+        resp = json.dumps({'path': f'outputs/{img_type}/{fname}'}).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
 
     def _proxy(self):
         length = int(self.headers.get('Content-Length', 0))
