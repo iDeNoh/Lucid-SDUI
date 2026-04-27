@@ -179,7 +179,7 @@ const state = {
   lastSeed:     -1,
   lastInfo:     {},
   progressTimer:  null,
-  progressAbort:  null,  // AbortController for in-flight progress polls
+  progressAbort:  null,
   currentTab:   'txt2img',
   initImages: { i2i: null, vid: null, upscale: null, caption: null },
   allLoras:   [],
@@ -187,7 +187,20 @@ const state = {
   animFrames: [],
   animIdx:    0,
   genHistory: [],
+  mediaData:  {},
+  mediaFilter: 'all',
 };
+
+// ===== Modal zoom/pan state =====
+let modalZoom      = 1;
+let modalPan       = { x: 0, y: 0 };
+let modalDragging  = false;
+let modalDragOrig  = null;   // { x: clientX - pan.x, y: clientY - pan.y }
+let modalTouchStart = null;  // { x, y } at single-touch start
+let modalPan0      = null;   // pan snapshot at touch/drag start
+let modalTouchMoved = false;
+let modalPinchDist0 = 0;
+let modalZoom0     = 1;
 
 // ===== Generation History =====
 
@@ -745,10 +758,115 @@ function sendToVideo(b64) {
 
 // ===== Modal =====
 
+function applyModalTransform() {
+  $('modal-img').style.transform = `translate(${modalPan.x}px, ${modalPan.y}px) scale(${modalZoom})`;
+  $('modal-viewport').style.cursor = modalZoom > 1 ? (modalDragging ? 'grabbing' : 'grab') : 'default';
+}
+
+function resetModalZoom() {
+  modalZoom = 1;
+  modalPan  = { x: 0, y: 0 };
+  applyModalTransform();
+}
+
+function initModalZoom() {
+  const vp = $('modal-viewport');
+
+  // Mouse wheel — zoom toward cursor
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect  = vp.getBoundingClientRect();
+    const mx    = e.clientX - rect.left - rect.width  / 2;
+    const my    = e.clientY - rect.top  - rect.height / 2;
+    const prev  = modalZoom;
+    modalZoom   = Math.max(1, Math.min(8, modalZoom * (e.deltaY < 0 ? 1.25 : 1 / 1.25)));
+    if (modalZoom === 1) {
+      modalPan = { x: 0, y: 0 };
+    } else if (modalZoom !== prev) {
+      const r   = modalZoom / prev;
+      modalPan.x = mx - r * (mx - modalPan.x);
+      modalPan.y = my - r * (my - modalPan.y);
+    }
+    applyModalTransform();
+  }, { passive: false });
+
+  // Mouse drag
+  vp.addEventListener('mousedown', e => {
+    if (modalZoom <= 1) return;
+    modalDragging = true;
+    modalDragOrig = { x: e.clientX - modalPan.x, y: e.clientY - modalPan.y };
+    applyModalTransform();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!modalDragging) return;
+    modalPan.x = e.clientX - modalDragOrig.x;
+    modalPan.y = e.clientY - modalDragOrig.y;
+    applyModalTransform();
+  });
+  document.addEventListener('mouseup', () => {
+    if (!modalDragging) return;
+    modalDragging = false;
+    applyModalTransform();
+  });
+
+  // Touch — pinch zoom + pan + tap-to-close
+  vp.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      modalPinchDist0  = touchDist(e.touches);
+      modalZoom0       = modalZoom;
+      modalPan0        = { ...modalPan };
+      modalTouchMoved  = true;
+    } else {
+      modalTouchStart  = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      modalPan0        = { ...modalPan };
+      modalTouchMoved  = false;
+    }
+  }, { passive: false });
+
+  vp.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2 && modalPinchDist0) {
+      const ratio = touchDist(e.touches) / modalPinchDist0;
+      modalZoom = Math.max(1, Math.min(8, modalZoom0 * ratio));
+      if (modalZoom === 1) modalPan = { x: 0, y: 0 };
+      applyModalTransform();
+    } else if (e.touches.length === 1 && modalTouchStart) {
+      const dx = e.touches[0].clientX - modalTouchStart.x;
+      const dy = e.touches[0].clientY - modalTouchStart.y;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) modalTouchMoved = true;
+      if (modalZoom > 1) {
+        modalPan.x = modalPan0.x + dx;
+        modalPan.y = modalPan0.y + dy;
+        applyModalTransform();
+      }
+    }
+  }, { passive: false });
+
+  vp.addEventListener('touchend', e => {
+    if (e.touches.length === 0) {
+      if (!modalTouchMoved && modalZoom <= 1) { closeModal(); return; }
+      modalPinchDist0 = 0;
+      modalTouchStart = null;
+    } else if (e.touches.length === 1) {
+      modalPinchDist0 = 0;
+      modalTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      modalPan0       = { ...modalPan };
+      modalTouchMoved = true;
+    }
+  });
+}
+
+function touchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 function openModal(b64, infoStr, frames, fps) {
+  resetModalZoom();
   $('modal-img').src = 'data:image/png;base64,' + b64;
 
-  // If video frames provided, animate in modal
   if (frames && frames.length > 1) {
     clearInterval(state.animTimer);
     state.animFrames = frames;
@@ -778,6 +896,66 @@ function closeModal() {
   $('modal').style.display = 'none';
   clearInterval(state.animTimer);
   state.animTimer = null;
+  resetModalZoom();
+}
+
+// ===== Media Browser =====
+
+function openMediaBrowser() {
+  $('media-browser').style.display = 'flex';
+  $('media-grid').innerHTML = '<div class="media-empty">Loading…</div>';
+  fetch('/outputs')
+    .then(r => r.json())
+    .then(data => { state.mediaData = data; renderMedia(state.mediaFilter); })
+    .catch(() => { $('media-grid').innerHTML = '<div class="media-empty">No saved images found.</div>'; });
+}
+
+function closeMediaBrowser() {
+  $('media-browser').style.display = 'none';
+}
+
+function renderMedia(filter) {
+  state.mediaFilter = filter;
+  $$('.media-filter').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+  const grid = $('media-grid');
+  grid.innerHTML = '';
+
+  const entries = [];
+  for (const [type, files] of Object.entries(state.mediaData || {})) {
+    if (filter !== 'all' && type !== filter) continue;
+    files.forEach(fname => entries.push({ type, fname }));
+  }
+  entries.sort((a, b) => b.fname.localeCompare(a.fname));
+
+  if (!entries.length) {
+    grid.innerHTML = '<div class="media-empty">No images.</div>';
+    return;
+  }
+
+  for (const { type, fname } of entries) {
+    const item = document.createElement('div');
+    item.className = 'media-item';
+    const img = document.createElement('img');
+    img.src     = `/outputs/${type}/${fname}`;
+    img.loading = 'lazy';
+    item.appendChild(img);
+    item.addEventListener('click', () => loadMediaImage(type, fname));
+    grid.appendChild(item);
+  }
+}
+
+async function loadMediaImage(type, fname) {
+  try {
+    const blob = await fetch(`/outputs/${type}/${fname}`).then(r => r.blob());
+    const b64  = await new Promise(res => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result.split(',')[1]);
+      reader.readAsDataURL(blob);
+    });
+    openModal(b64, '', null, 0);
+  } catch {
+    toast('Could not load image', 'error');
+  }
 }
 
 function formatInfo(infoStr) {
@@ -1153,7 +1331,7 @@ function initEvents() {
   // Modal
   $('modal-close').addEventListener('click', closeModal);
   $('modal-overlay').addEventListener('click', closeModal);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeMediaBrowser(); } });
 
   // Gallery clear
   $('btn-clear-gallery').addEventListener('click', () => {
@@ -1165,6 +1343,12 @@ function initEvents() {
   $('btn-history').addEventListener('click', openHistoryPanel);
   $('history-close').addEventListener('click', closeHistoryPanel);
   $('history-panel').addEventListener('click', e => { if (e.target === $('history-panel')) closeHistoryPanel(); });
+
+  // Media browser
+  $('btn-media').addEventListener('click', openMediaBrowser);
+  $('media-close').addEventListener('click', closeMediaBrowser);
+  $('media-browser').addEventListener('click', e => { if (e.target === $('media-browser')) closeMediaBrowser(); });
+  $$('.media-filter').forEach(btn => btn.addEventListener('click', () => renderMedia(btn.dataset.filter)));
 
   // Log panel
   $('btn-log-panel').addEventListener('click', () => {
@@ -1264,6 +1448,7 @@ function escapeHtml(str) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
+  initModalZoom();
   const saveCb = $('save-to-disk');
   if (saveCb) {
     saveCb.checked = localStorage.getItem(SAVE_KEY) === '1';

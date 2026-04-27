@@ -23,6 +23,7 @@
     </div>
     <div class="header-right">
       <button id="btn-refresh" class="btn-sm btn-ghost">⟳ Refresh</button>
+      <button id="btn-media" class="btn-sm btn-ghost" title="Browse saved images">Media</button>
       <button id="btn-history" class="btn-sm btn-ghost" title="Previous generations">History</button>
       <button id="btn-log-panel" class="btn-sm btn-ghost log-btn" title="View / download log">
         Log <span id="log-err-count" class="log-err-badge" style="display:none">0</span>
@@ -376,7 +377,9 @@
   <div class="modal-overlay" id="modal-overlay"></div>
   <div class="modal-content">
     <button class="modal-close" id="modal-close">✕</button>
-    <img id="modal-img" src="" alt="Generated image">
+    <div class="modal-viewport" id="modal-viewport">
+      <img id="modal-img" src="" alt="">
+    </div>
     <div class="modal-actions">
       <button id="modal-download" class="btn-sm">⬇ Download</button>
       <button id="modal-send-i2i" class="btn-sm btn-secondary">→ img2img</button>
@@ -384,6 +387,24 @@
       <button id="modal-use-seed" class="btn-sm btn-ghost">Use Seed</button>
     </div>
     <pre id="modal-info" class="modal-info"></pre>
+  </div>
+</div>
+
+<!-- Media browser -->
+<div id="media-browser" class="media-browser" style="display:none">
+  <div class="media-browser-inner">
+    <div class="media-browser-header">
+      <span class="section-label">Media</span>
+      <div id="media-filters" class="media-filters">
+        <button class="media-filter active" data-filter="all">All</button>
+        <button class="media-filter" data-filter="txt2img">txt2img</button>
+        <button class="media-filter" data-filter="img2img">img2img</button>
+        <button class="media-filter" data-filter="video">video</button>
+        <button class="media-filter" data-filter="upscale">upscale</button>
+      </div>
+      <button id="media-close" class="btn-sm btn-ghost">✕</button>
+    </div>
+    <div id="media-grid" class="media-grid"></div>
   </div>
 </div>
 

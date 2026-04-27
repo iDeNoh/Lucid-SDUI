@@ -31,8 +31,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         if path.startswith('/sdapi/') or path == '/openapi.json':
             self._proxy()
+        elif path == '/outputs':
+            self._list_outputs()
         else:
             self._static(path)
+
+    def _list_outputs(self):
+        result = {}
+        outputs_dir = os.path.join(DIR, 'outputs')
+        if os.path.isdir(outputs_dir):
+            for name in sorted(os.listdir(outputs_dir)):
+                folder = os.path.join(outputs_dir, name)
+                if os.path.isdir(folder):
+                    files = sorted(
+                        [f for f in os.listdir(folder) if f.lower().endswith('.png')],
+                        reverse=True
+                    )
+                    if files:
+                        result[name] = files
+        resp = json.dumps(result).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
 
     def do_POST(self):
         if self.path == '/save':
