@@ -148,7 +148,8 @@ class SDNextAPI {
   getLoras()     { return this.get('/sdapi/v1/loras'); }
   getOptions()   { return this.get('/sdapi/v1/options'); }
   getProgress(signal) { return this._fetch('GET', '/sdapi/v1/progress?skip_current_image=false', undefined, signal); }
-  getUpscalers() { return this.get('/sdapi/v1/upscalers'); }
+  getUpscalers()  { return this.get('/sdapi/v1/upscalers'); }
+  getDetailers()  { return this.get('/sdapi/v1/detailers'); }
 
   setOptions(opts)      { return this.post('/sdapi/v1/options', opts); }
   setCheckpoint(name)   { return this.post(`/sdapi/v1/checkpoint?sd_model_checkpoint=${encodeURIComponent(name)}`); }
@@ -313,18 +314,21 @@ async function connect() {
 }
 
 async function loadAll() {
-  const [models, samplers, vaes, options, upscalers] = await Promise.allSettled([
+  const [models, samplers, vaes, options, upscalers, detailers] = await Promise.allSettled([
     api.getModels(),
     api.getSamplers(),
     api.getVAEs(),
     api.getOptions(),
     api.getUpscalers(),
+    api.getDetailers(),
   ]);
 
   if (models.status === 'fulfilled')    populateModels(models.value, options.value?.sd_model_checkpoint);
   if (samplers.status === 'fulfilled')  populateSamplers(samplers.value, options.value?.sampler_name);
   if (vaes.status === 'fulfilled')      populateVAEs(vaes.value, options.value?.sd_vae);
   if (upscalers.status === 'fulfilled') populateUpscalers(upscalers.value);
+  if (detailers.status === 'fulfilled') populateDetailers(detailers.value);
+  else Log.warn('API', 'Could not fetch detailers', detailers.reason?.message);
 
   if (options.status === 'fulfilled') ensureLivePreviews(options.value);
 
@@ -378,6 +382,16 @@ function populateVAEs(vaes, current) {
     const o = new Option(v.model_name, v.model_name);
     if (v.model_name === current) o.selected = true;
     sel.add(o);
+  });
+}
+
+function populateDetailers(detailers) {
+  const sel = $('sel-detailer-model');
+  if (!sel) return;
+  sel.innerHTML = '';
+  (detailers || []).forEach(d => {
+    const name = typeof d === 'string' ? d : (d.name || String(d));
+    sel.add(new Option(name, name));
   });
 }
 
@@ -480,10 +494,19 @@ async function generate() {
       negative_prompt: $('t2i-negative').value,
     };
     if ($('t2i-hires').checked) {
-      params.enable_hr          = true;
-      params.hr_scale           = +$('range-hires-scale').value;
-      params.denoising_strength = +$('range-hires-denoise').value;
-      params.hr_upscaler        = $('sel-hires-upscaler').value;
+      params.enable_hr               = true;
+      params.hr_scale                = +$('range-hires-scale').value;
+      params.hr_denoising_strength   = +$('range-hires-denoise').value;
+      params.hr_upscaler             = $('sel-hires-upscaler').value;
+      params.hr_second_pass_steps    = +$('inp-hires-steps').value;
+    }
+    if ($('t2i-detailer').checked && $('sel-detailer-model').value) {
+      params.detailer_enabled    = true;
+      params.detailer_models     = [$('sel-detailer-model').value];
+      params.detailer_strength   = +$('range-detailer-strength').value;
+      params.detailer_conf       = +$('range-detailer-conf').value;
+      params.detailer_steps      = +$('inp-detailer-steps').value;
+      params.detailer_resolution = +$('inp-detailer-res').value;
     }
     method = 'txt2img';
 
@@ -497,6 +520,14 @@ async function generate() {
       denoising_strength:  +$('range-denoise').value,
       resize_mode:         +$('sel-resize-mode').value,
     };
+    if ($('t2i-detailer').checked && $('sel-detailer-model').value) {
+      params.detailer_enabled    = true;
+      params.detailer_models     = [$('sel-detailer-model').value];
+      params.detailer_strength   = +$('range-detailer-strength').value;
+      params.detailer_conf       = +$('range-detailer-conf').value;
+      params.detailer_steps      = +$('inp-detailer-steps').value;
+      params.detailer_resolution = +$('inp-detailer-res').value;
+    }
     method = 'img2img';
 
   } else if (tab === 'video') {
@@ -1328,8 +1359,10 @@ function initEvents() {
     ['range-frames',       'val-frames',       v => String(Math.round(v))],
     ['range-fps',          'val-fps',          v => String(Math.round(v))],
     ['range-hires-scale',  'val-hires-scale',  v => (+v).toFixed(1)],
-    ['range-hires-denoise','val-hires-denoise',v => (+v).toFixed(2)],
-    ['range-upscale',      'val-upscale',      v => (+v).toFixed(1)],
+    ['range-hires-denoise',     'val-hires-denoise',     v => (+v).toFixed(2)],
+    ['range-upscale',           'val-upscale',           v => (+v).toFixed(1)],
+    ['range-detailer-strength', 'val-detailer-strength', v => (+v).toFixed(2)],
+    ['range-detailer-conf',     'val-detailer-conf',     v => (+v).toFixed(2)],
   ];
   sliderDefs.forEach(([id, vid, fmt]) => {
     const el = $(id);
@@ -1360,6 +1393,11 @@ function initEvents() {
   // Hi-res toggle
   $('t2i-hires').addEventListener('change', function () {
     $('hires-params').style.display = this.checked ? 'flex' : 'none';
+  });
+
+  // Detailer toggle
+  $('t2i-detailer').addEventListener('change', function () {
+    $('detailer-params').style.display = this.checked ? 'flex' : 'none';
   });
 
   // Generate / interrupt / skip
