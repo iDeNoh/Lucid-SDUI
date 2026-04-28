@@ -222,8 +222,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if body:
             req.add_header('Content-Type', ct)
 
+        # Generation endpoints can take arbitrarily long; progress polling needs a short timeout
+        gen_paths = ('/sdapi/v1/txt2img', '/sdapi/v1/img2img')
+        path_base = self.path.split('?')[0]
+        timeout = None if path_base in gen_paths else 60
+
         try:
-            with urllib.request.urlopen(req, timeout=600) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = resp.read()
                 self.send_response(resp.status)
                 self.send_header('Content-Type', resp.headers.get('Content-Type', 'application/json'))
