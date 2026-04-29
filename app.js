@@ -193,6 +193,7 @@ const state = {
   mediaEntries: [],
   mediaIndex:   0,
   lightboxB64:  null,
+  looping:      false,
 };
 
 // ===== Modal zoom/pan state =====
@@ -556,6 +557,7 @@ async function generate() {
   Log.info('Generate', `${method} — model: ${$('sel-model').value.split('/').pop()}`, JSON.stringify(logParams));
   startGen();
   const t0 = performance.now();
+  let succeeded = false;
   try {
     const result = await api[method](params);
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
@@ -563,12 +565,21 @@ async function generate() {
     Log.info('Generate', `Done — ${count} image(s) in ${elapsed}s`);
     handleResult(result, tab === 'video' ? +$('range-fps').value : 0, tab);
     recordGenHistory(tab, params, result);
+    succeeded = true;
   } catch (e) {
     Log.error('Generate', 'Generation failed', e.message);
     toast('Generation failed: ' + e.message, 'error');
+    state.looping = false;
+    updateLoopBtn();
   } finally {
     stopGen();
   }
+  if (succeeded && state.looping) generate();
+}
+
+function updateLoopBtn() {
+  $('btn-loop').classList.toggle('active', state.looping);
+  $('btn-loop').title = state.looping ? 'Looping — click to stop after this generation' : 'Generate continuously until stopped';
 }
 
 function startGen() {
@@ -1400,9 +1411,19 @@ function initEvents() {
     $('detailer-params').style.display = this.checked ? 'flex' : 'none';
   });
 
-  // Generate / interrupt / skip
+  // Generate / interrupt / skip / loop
   $('btn-generate').addEventListener('click', generate);
-  $('btn-interrupt').addEventListener('click', async () => { await api.interrupt(); toast('Interrupted', 'warn'); });
+  $('btn-loop').addEventListener('click', () => {
+    state.looping = !state.looping;
+    updateLoopBtn();
+    if (state.looping && !state.generating) generate();
+  });
+  $('btn-interrupt').addEventListener('click', async () => {
+    state.looping = false;
+    updateLoopBtn();
+    await api.interrupt();
+    toast('Interrupted', 'warn');
+  });
   $('btn-skip').addEventListener('click', () => api.skip());
 
   // Prompt enhance

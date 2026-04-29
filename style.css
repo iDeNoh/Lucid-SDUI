@@ -607,6 +607,13 @@ button {
 }
 .btn-interrupt:hover { filter: brightness(1.1); }
 
+#btn-loop { font-size: 16px; padding: 6px 10px; }
+#btn-loop.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
 /* ===== Progress ===== */
 #progress-area {
   flex-shrink: 0;
