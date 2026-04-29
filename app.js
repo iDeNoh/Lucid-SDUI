@@ -873,6 +873,7 @@ function stopGen() {
 
   setStatus(true);
   setTimeout(() => {
+    if (state.generating) return; // loop already started next generation
     $('progress-area').style.display = 'none';
     $('live-preview').style.display  = 'none';
     $('progress-fill').style.width   = '0%';
@@ -903,7 +904,9 @@ async function pollProgress() {
       img.src = 'data:image/jpeg;base64,' + p.current_image;
     }
   } catch (e) {
-    if (e.name !== 'AbortError') console.warn('[poll error]', e.message);
+    if (e.name === 'AbortError') return; // aborted — new generation will start its own poller
+    if (!state.generating) return;
+    console.warn('[poll error]', e.message);
   }
   // Schedule next poll only after this one completes — prevents flooding SDNext
   if (state.generating) state.progressTimer = setTimeout(pollProgress, 500);
