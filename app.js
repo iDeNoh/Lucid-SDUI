@@ -214,26 +214,47 @@ const HISTORY_MAX  = 30;
 const SAVE_KEY     = 'sdnext-ui-save';
 
 function loadHistory() {
-  try { state.genHistory = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
-  catch { state.genHistory = []; }
+  try {
+    const stored = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    // Migrate: old entries stored raw b64 (no data: prefix); drop them so they don't bloat storage
+    state.genHistory = stored.filter(e => !e.thumb || e.thumb.startsWith('data:'));
+  } catch { state.genHistory = []; }
 }
 
 function saveHistory(entry) {
   state.genHistory.unshift(entry);
   if (state.genHistory.length > HISTORY_MAX) state.genHistory.length = HISTORY_MAX;
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(state.genHistory)); } catch {}
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(state.genHistory)); }
+  catch (e) { Log.warn('History', 'localStorage write failed — history may not persist', e.message); }
 }
 
-function recordGenHistory(tab, params, result) {
+function makeThumbnail(b64, maxPx = 128) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => resolve('');
+    img.src = 'data:image/png;base64,' + b64;
+  });
+}
+
+async function recordGenHistory(tab, params, result) {
   const images = result.images || [];
   if (!images.length) return;
-  const info = parseInfo(result.info);
+  const info  = parseInfo(result.info);
+  const thumb = await makeThumbnail(images[0]);
   const entry = {
     id:     Date.now(),
     ts:     new Date().toLocaleString(),
     tab,
-    params: { ...params, init_images: undefined },  // strip base64
-    thumb:  images[0],
+    params: { ...params },
+    thumb,
     seed:   info.seed ?? -1,
   };
   delete entry.params.init_images;
@@ -1583,7 +1604,7 @@ function openHistoryPanel() {
       const item = document.createElement('div');
       item.className = 'history-item';
       item.innerHTML = `
-        <img class="history-thumb" src="${/^[A-Za-z0-9+/]+=*$/.test(entry.thumb || '') ? 'data:image/png;base64,' + entry.thumb : ''}" alt="">
+        <img class="history-thumb" src="${entry.thumb || ''}" alt="">
         <div class="history-meta">
           <div class="history-prompt">${escapeHtml((entry.params.prompt || '').slice(0, 120))}</div>
           <div class="history-details">
