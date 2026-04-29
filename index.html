@@ -23,6 +23,7 @@
     </div>
     <div class="header-right">
       <button id="btn-refresh" class="btn-sm btn-ghost">⟳ Refresh</button>
+      <button id="btn-wildcards" class="btn-sm btn-ghost" title="Edit wildcard files">Wildcards</button>
       <button id="btn-media" class="btn-sm btn-ghost" title="Browse saved images">Media</button>
       <button id="btn-history" class="btn-sm btn-ghost" title="Previous generations">History</button>
       <button id="btn-log-panel" class="btn-sm btn-ghost log-btn" title="View / download log">
@@ -473,6 +474,45 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Wildcards panel -->
+<div id="wildcards-panel" class="wildcards-panel" style="display:none">
+  <div class="wildcards-overlay" id="wildcards-overlay"></div>
+  <div class="wildcards-inner">
+    <div class="wildcards-header">
+      <span class="section-label">Wildcards</span>
+      <div class="wildcards-header-actions">
+        <button id="wc-new-file"   class="btn-sm btn-secondary">+ File</button>
+        <button id="wc-new-folder" class="btn-sm btn-ghost">+ Folder</button>
+        <button id="wildcards-close" class="btn-sm btn-ghost">✕</button>
+      </div>
+    </div>
+    <div class="wildcards-body">
+      <div class="wildcards-sidebar" id="wildcards-sidebar"></div>
+      <div class="wildcards-editor-pane">
+        <div id="wc-placeholder" class="wc-placeholder">
+          <p>Select a wildcard file to edit, or create a new one.</p>
+          <p class="wc-hint">Call wildcards in your prompt with <code>__name__</code><br>
+          Use <code>__folder/name__</code> for nested wildcards<br>
+          Use <code>__*__</code> or <code>__folder/*__</code> for random selection<br>
+          Use <code>__prefix*__</code> to match by name prefix</p>
+        </div>
+        <div id="wc-editor" class="wc-editor" style="display:none">
+          <div class="wc-editor-bar">
+            <span id="wc-editor-path" class="wc-editor-path"></span>
+            <button id="wc-rename" class="btn-sm btn-ghost" title="Rename / move to a new path">Rename</button>
+          </div>
+          <textarea id="wc-textarea" class="wc-textarea" spellcheck="false"
+                    placeholder="One option per line&#10;# Lines starting with # are comments"></textarea>
+          <div class="wc-editor-footer">
+            <button id="wc-save"   class="btn-sm btn-secondary">Save</button>
+            <button id="wc-delete" class="btn-sm btn-ghost wc-delete-btn">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

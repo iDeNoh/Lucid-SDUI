@@ -192,8 +192,10 @@ const state = {
   mediaFilter:  'all',
   mediaEntries: [],
   mediaIndex:   0,
-  lightboxB64:  null,
-  looping:      false,
+  lightboxB64:   null,
+  looping:       false,
+  wcCurrentPath: null,
+  wcDirty:       false,
 };
 
 // ===== Modal zoom/pan state =====
@@ -580,7 +582,9 @@ async function generate() {
   const t0 = performance.now();
   let succeeded = false;
   try {
-    const result = await api[method](params);
+    // Resolve wildcards server-side; params keeps originals for history
+    const apiParams = await resolveWildcards(params);
+    const result = await api[method](apiParams);
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
     const count   = result.images?.length ?? 0;
     Log.info('Generate', `Done — ${count} image(s) in ${elapsed}s`);
@@ -596,6 +600,231 @@ async function generate() {
     stopGen();
   }
   if (succeeded && state.looping) generate();
+}
+
+// ===== Wildcard resolution =====
+
+async function resolveWildcards(params) {
+  const p = params.prompt         || '';
+  const n = params.negative_prompt || '';
+  if (!p.includes('__') && !n.includes('__')) return params;
+  try {
+    const r = await fetch('/wildcards/resolve', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({prompt: p, negative_prompt: n}),
+    });
+    if (!r.ok) return params;
+    const d = await r.json();
+    const resolved = {...params};
+    if (d.prompt          !== undefined) resolved.prompt          = d.prompt;
+    if (d.negative_prompt !== undefined) resolved.negative_prompt = d.negative_prompt;
+    if (d.prompt !== p || d.negative_prompt !== n)
+      Log.info('Wildcards', 'Resolved: ' + (d.prompt || '').slice(0, 80));
+    return resolved;
+  } catch (e) {
+    Log.warn('Wildcards', 'Resolve failed, using raw prompt', e.message);
+    return params;
+  }
+}
+
+// ===== Wildcard editor =====
+
+function openWildcardsPanel() {
+  $('wildcards-panel').style.display = 'flex';
+  loadWildcardTree();
+}
+
+function closeWildcardsPanel() {
+  if (state.wcDirty && !confirm('Unsaved changes — discard?')) return;
+  $('wildcards-panel').style.display = 'none';
+  state.wcCurrentPath = null;
+  state.wcDirty = false;
+}
+
+async function loadWildcardTree() {
+  try {
+    const r = await fetch('/wildcards');
+    const data = await r.json();
+    renderWildcardTree(data);
+  } catch (e) {
+    $('wildcards-sidebar').innerHTML = '<div class="wc-tree-empty">Error loading wildcards</div>';
+  }
+}
+
+function renderWildcardTree(data) {
+  const sidebar = $('wildcards-sidebar');
+  sidebar.innerHTML = '';
+
+  // Build sorted folder list; '' = root
+  const folders = Object.keys(data).sort();
+  const hasAny  = folders.some(f => data[f].length > 0);
+
+  if (!hasAny && folders.length <= 1) {
+    sidebar.innerHTML = '<div class="wc-tree-empty">No wildcards yet.<br>Click + File to create one.</div>';
+    return;
+  }
+
+  // Render tree grouped by folder
+  const collapsedFolders = new Set();
+
+  folders.forEach(folder => {
+    const files = data[folder];
+
+    if (folder !== '') {
+      const depth     = folder.split('/').length;
+      const name      = folder.split('/').pop();
+      const folderEl  = document.createElement('div');
+      folderEl.className = 'wc-tree-folder';
+      folderEl.style.paddingLeft = (4 + depth * 10) + 'px';
+      folderEl.dataset.folder = folder;
+      folderEl.innerHTML = `<span class="wc-folder-toggle">▾</span> 📁 ${escapeHtml(name)}`;
+      folderEl.addEventListener('click', () => {
+        const isCollapsed = collapsedFolders.has(folder);
+        if (isCollapsed) {
+          collapsedFolders.delete(folder);
+          folderEl.classList.remove('collapsed');
+        } else {
+          collapsedFolders.add(folder);
+          folderEl.classList.add('collapsed');
+        }
+        sidebar.querySelectorAll(`[data-folder-parent="${folder}"]`).forEach(el => {
+          el.style.display = isCollapsed ? '' : 'none';
+        });
+      });
+      sidebar.appendChild(folderEl);
+    }
+
+    const depth = folder === '' ? 0 : folder.split('/').length;
+    files.forEach(fname => {
+      const fullPath = folder ? `${folder}/${fname}` : fname;
+      const fileEl   = document.createElement('div');
+      fileEl.className    = 'wc-tree-file';
+      fileEl.style.paddingLeft = (14 + depth * 10) + 'px';
+      fileEl.dataset.folderParent = folder || '';
+      fileEl.dataset.path = fullPath;
+      fileEl.textContent  = fname;
+      if (fullPath === state.wcCurrentPath) fileEl.classList.add('active');
+      fileEl.addEventListener('click', () => editWildcardFile(fullPath));
+      sidebar.appendChild(fileEl);
+    });
+  });
+}
+
+async function editWildcardFile(path) {
+  if (state.wcDirty && !confirm('Unsaved changes — discard?')) return;
+  state.wcCurrentPath = path;
+  state.wcDirty = false;
+  try {
+    const r = await fetch('/wildcards/content?path=' + encodeURIComponent(path));
+    if (!r.ok) throw new Error('Not found');
+    const d = await r.json();
+    $('wc-editor-path').textContent = path + '.txt';
+    $('wc-textarea').value = d.content;
+    $('wc-placeholder').style.display = 'none';
+    $('wc-editor').style.display = 'flex';
+    $('wc-textarea').focus();
+    // Highlight active file in tree
+    $$('.wc-tree-file').forEach(el => el.classList.toggle('active', el.dataset.path === path));
+  } catch (e) {
+    toast('Failed to load wildcard: ' + e.message, 'error');
+  }
+}
+
+async function saveWildcardFile() {
+  if (!state.wcCurrentPath) return;
+  const content = $('wc-textarea').value;
+  try {
+    const r = await fetch('/wildcards/save', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({path: state.wcCurrentPath, content}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    state.wcDirty = false;
+    toast('Saved ' + state.wcCurrentPath, 'success');
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteWildcardFile() {
+  if (!state.wcCurrentPath) return;
+  if (!confirm(`Delete "${state.wcCurrentPath}"?`)) return;
+  try {
+    const r = await fetch('/wildcards/delete', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({path: state.wcCurrentPath}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    state.wcCurrentPath = null;
+    state.wcDirty = false;
+    $('wc-editor').style.display      = 'none';
+    $('wc-placeholder').style.display = 'flex';
+    toast('Deleted', 'info');
+    loadWildcardTree();
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+async function renameWildcardFile() {
+  if (!state.wcCurrentPath) return;
+  const newPath = prompt('New path (without .txt):', state.wcCurrentPath);
+  if (!newPath || newPath === state.wcCurrentPath) return;
+  try {
+    const r = await fetch('/wildcards/move', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({from: state.wcCurrentPath, to: newPath}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    state.wcCurrentPath = newPath;
+    $('wc-editor-path').textContent = newPath + '.txt';
+    toast('Renamed to ' + newPath, 'success');
+    loadWildcardTree();
+  } catch (e) {
+    toast('Rename failed: ' + e.message, 'error');
+  }
+}
+
+async function newWildcardFile() {
+  const path = prompt('File path (e.g. "colors" or "animals/cats"):');
+  if (!path) return;
+  const clean = path.replace(/\.txt$/, '').trim();
+  if (!clean) return;
+  try {
+    const r = await fetch('/wildcards/save', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({path: clean, content: ''}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    await loadWildcardTree();
+    editWildcardFile(clean);
+  } catch (e) {
+    toast('Create failed: ' + e.message, 'error');
+  }
+}
+
+async function newWildcardFolder() {
+  const path = prompt('Folder path (e.g. "animals" or "animals/domestic"):');
+  if (!path) return;
+  const clean = path.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!clean) return;
+  try {
+    const r = await fetch('/wildcards/mkdir', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({path: clean}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    toast('Folder created: ' + clean, 'success');
+    loadWildcardTree();
+  } catch (e) {
+    toast('Create folder failed: ' + e.message, 'error');
+  }
 }
 
 function updateLoopBtn() {
@@ -1524,6 +1753,20 @@ function initEvents() {
   $('btn-history').addEventListener('click', openHistoryPanel);
   $('history-close').addEventListener('click', closeHistoryPanel);
   $('history-panel').addEventListener('click', e => { if (e.target === $('history-panel')) closeHistoryPanel(); });
+
+  // Wildcards panel
+  $('btn-wildcards').addEventListener('click', openWildcardsPanel);
+  $('wildcards-close').addEventListener('click', closeWildcardsPanel);
+  $('wildcards-overlay').addEventListener('click', closeWildcardsPanel);
+  $('wc-new-file').addEventListener('click', newWildcardFile);
+  $('wc-new-folder').addEventListener('click', newWildcardFolder);
+  $('wc-save').addEventListener('click', saveWildcardFile);
+  $('wc-delete').addEventListener('click', deleteWildcardFile);
+  $('wc-rename').addEventListener('click', renameWildcardFile);
+  $('wc-textarea').addEventListener('input', () => { state.wcDirty = true; });
+  $('wc-textarea').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveWildcardFile(); }
+  });
 
   // Media browser — grid view
   $('btn-media').addEventListener('click', openMediaBrowser);

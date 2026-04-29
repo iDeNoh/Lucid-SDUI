@@ -14,10 +14,15 @@ import base64
 import datetime
 import struct
 import webbrowser
+import re
+import glob as _glob
+import random
+import shutil
 
 PORT = 8080
 API_TARGET = 'http://localhost:7860'
 DIR = os.path.dirname(os.path.abspath(__file__))
+WILDCARDS_DIR = os.path.join(DIR, 'extras', 'wildcards')
 
 MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -37,6 +42,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._output_meta()
         elif path == '/outputs':
             self._list_outputs()
+        elif path == '/wildcards':
+            self._wc_list()
+        elif path == '/wildcards/content':
+            self._wc_content()
         else:
             self._static(path)
 
@@ -175,6 +184,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._save()
         elif self.path.startswith('/sdapi/'):
             self._proxy()
+        elif self.path == '/wildcards/save':
+            self._wc_save()
+        elif self.path == '/wildcards/delete':
+            self._wc_delete()
+        elif self.path == '/wildcards/mkdir':
+            self._wc_mkdir()
+        elif self.path == '/wildcards/move':
+            self._wc_move()
+        elif self.path == '/wildcards/resolve':
+            self._wc_resolve()
         else:
             self.send_error(405)
 
@@ -212,6 +231,189 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(resp)))
         self.end_headers()
         self.wfile.write(resp)
+
+    # ── Wildcard helpers ──────────────────────────────────────────────────────
+
+    def _send_json(self, data, status=200):
+        body = json.dumps(data).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_json_body(self):
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            return json.loads(self.rfile.read(length))
+        except Exception:
+            return None
+
+    def _wc_safe(self, rel):
+        """Return absolute path if rel is safely inside WILDCARDS_DIR, else None."""
+        rel = rel.replace('\\', '/').strip('/')
+        fp  = os.path.normpath(os.path.join(WILDCARDS_DIR, rel))
+        try:
+            safe = os.path.commonpath([fp, WILDCARDS_DIR]) == WILDCARDS_DIR
+        except ValueError:
+            safe = False
+        return fp if safe else None
+
+    def _wc_list(self):
+        result = {}
+        if not os.path.isdir(WILDCARDS_DIR):
+            self._send_json(result)
+            return
+        for root, dirs, files in os.walk(WILDCARDS_DIR):
+            dirs.sort()
+            rel = os.path.relpath(root, WILDCARDS_DIR).replace('\\', '/')
+            if rel == '.':
+                rel = ''
+            txts = sorted(f[:-4] for f in files if f.lower().endswith('.txt'))
+            result[rel] = txts
+        self._send_json(result)
+
+    def _wc_content(self):
+        qs  = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+        rel = qs.get('path', [''])[0]
+        fp  = self._wc_safe(rel + '.txt') if rel else None
+        if not fp or not os.path.isfile(fp):
+            self.send_error(404)
+            return
+        with open(fp, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self._send_json({'content': content})
+
+    def _wc_save(self):
+        data = self._read_json_body()
+        if not data:
+            self.send_error(400, 'Bad JSON')
+            return
+        rel  = data.get('path', '').strip('/')
+        text = data.get('content', '')
+        if not rel:
+            self.send_error(400, 'Missing path')
+            return
+        fp = self._wc_safe(rel + '.txt')
+        if not fp:
+            self.send_error(403)
+            return
+        os.makedirs(os.path.dirname(fp), exist_ok=True)
+        with open(fp, 'w', encoding='utf-8') as f:
+            f.write(text)
+        self._send_json({'ok': True})
+
+    def _wc_delete(self):
+        data = self._read_json_body()
+        if not data:
+            self.send_error(400)
+            return
+        rel = data.get('path', '').strip('/')
+        if not rel:
+            self.send_error(400)
+            return
+        # Could be a file or a folder
+        fp_file   = self._wc_safe(rel + '.txt')
+        fp_folder = self._wc_safe(rel)
+        if fp_file and os.path.isfile(fp_file):
+            os.remove(fp_file)
+            self._send_json({'ok': True})
+        elif fp_folder and os.path.isdir(fp_folder):
+            shutil.rmtree(fp_folder)
+            self._send_json({'ok': True})
+        else:
+            self.send_error(404)
+
+    def _wc_mkdir(self):
+        data = self._read_json_body()
+        if not data:
+            self.send_error(400)
+            return
+        rel = data.get('path', '').strip('/')
+        fp  = self._wc_safe(rel)
+        if not fp:
+            self.send_error(403)
+            return
+        os.makedirs(fp, exist_ok=True)
+        self._send_json({'ok': True})
+
+    def _wc_move(self):
+        data = self._read_json_body()
+        if not data:
+            self.send_error(400)
+            return
+        src = self._wc_safe(data.get('from', '').strip('/') + '.txt')
+        dst = self._wc_safe(data.get('to',   '').strip('/') + '.txt')
+        if not src or not dst:
+            self.send_error(403)
+            return
+        if not os.path.isfile(src):
+            self.send_error(404)
+            return
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.move(src, dst)
+        self._send_json({'ok': True})
+
+    def _wc_resolve(self):
+        data = self._read_json_body()
+        if data is None:
+            self.send_error(400)
+            return
+        prompt   = self._resolve_wildcards(data.get('prompt', ''))
+        negative = self._resolve_wildcards(data.get('negative_prompt', ''))
+        self._send_json({'prompt': prompt, 'negative_prompt': negative})
+
+    def _pick_wildcard_line(self, pattern):
+        """Pick a random line from wildcard file(s) matching pattern.
+        Supports: name, folder/name, *, folder/*, prefix*, folder/prefix*
+        """
+        if not os.path.isdir(WILDCARDS_DIR):
+            return None
+        parts    = pattern.replace('\\', '/').strip('/').split('/')
+        name_pat = parts[-1]
+        base     = os.path.join(WILDCARDS_DIR, *parts[:-1]) if len(parts) > 1 else WILDCARDS_DIR
+
+        if pattern.strip('/') == '*':
+            files = _glob.glob(os.path.join(WILDCARDS_DIR, '**', '*.txt'), recursive=True)
+        elif '*' in name_pat:
+            files = _glob.glob(os.path.join(base, name_pat + '.txt'))
+        else:
+            fp = os.path.normpath(os.path.join(base, name_pat + '.txt'))
+            files = [fp] if os.path.isfile(fp) else []
+
+        valid = []
+        for f in files:
+            try:
+                nf = os.path.normpath(f)
+                if os.path.isfile(nf) and os.path.commonpath([nf, WILDCARDS_DIR]) == WILDCARDS_DIR:
+                    valid.append(nf)
+            except ValueError:
+                pass
+
+        if not valid:
+            return None
+        chosen = random.choice(valid)
+        try:
+            with open(chosen, 'r', encoding='utf-8') as fh:
+                lines = [l.strip() for l in fh if l.strip() and not l.strip().startswith('#')]
+            return random.choice(lines) if lines else None
+        except Exception:
+            return None
+
+    def _resolve_wildcards(self, text, depth=0):
+        """Recursively resolve __wildcard__ patterns, up to depth 10."""
+        if depth > 10 or '__' not in text:
+            return text
+
+        def replacer(m):
+            line = self._pick_wildcard_line(m.group(1))
+            if line is None:
+                return m.group(0)
+            return self._resolve_wildcards(line, depth + 1)
+
+        return re.sub(r'__(.+?)__', replacer, text)
+
+    # ── Proxy ─────────────────────────────────────────────────────────────────
 
     def _proxy(self):
         length = int(self.headers.get('Content-Length', 0))
