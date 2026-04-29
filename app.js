@@ -582,6 +582,8 @@ async function generate() {
   try {
     // Resolve wildcards server-side; params keeps originals for history
     const apiParams = await resolveWildcards(params);
+    // Tell the proxy to save images server-side (works even when tab is hidden)
+    if ($('save-to-disk')?.checked) apiParams._ui_save = tab;
     const result = await api[method](apiParams);
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
     const count   = result.images?.length ?? 0;
@@ -918,17 +920,12 @@ function handleResult(result, fps = 0, type = 'txt2img') {
   if (info.seed != null && info.seed >= 0) state.lastSeed = info.seed;
 
   const infoStr = result.info || '';
-  const saving  = $('save-to-disk')?.checked;
 
   if (fps > 0 && images.length > 1) {
     addVideoToGallery(images, infoStr, fps);
-    if (saving) images.forEach(img => saveImageToDisk(img, 'video'));
     toast(`Generated ${images.length} frames`, 'success');
   } else {
-    images.forEach(img => {
-      addImageToGallery(img, infoStr);
-      if (saving) saveImageToDisk(img, type);
-    });
+    images.forEach(img => addImageToGallery(img, infoStr));
     toast(`Generated ${images.length} image(s) — seed ${info.seed ?? '?'}`, 'success');
   }
 

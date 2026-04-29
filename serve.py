@@ -420,18 +420,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
         body   = self.rfile.read(length) if length else None
         ct     = self.headers.get('Content-Type', 'application/json')
 
+        # Strip _ui_save from generation requests before forwarding to SDNext;
+        # server saves images itself so the client doesn't have to (works even when tab is hidden)
+        gen_paths = ('/sdapi/v1/txt2img', '/sdapi/v1/img2img')
+        path_base = self.path.split('?')[0]
+        ui_save_type = None
+        if path_base in gen_paths and body and 'application/json' in ct:
+            try:
+                body_json    = json.loads(body)
+                ui_save_type = body_json.pop('_ui_save', None)
+                if ui_save_type is not None:
+                    body = json.dumps(body_json).encode()
+            except Exception:
+                pass
+
         req = urllib.request.Request(API_TARGET + self.path, data=body, method=self.command)
         if body:
             req.add_header('Content-Type', ct)
 
-        # Generation endpoints can take arbitrarily long; progress polling needs a short timeout
-        gen_paths = ('/sdapi/v1/txt2img', '/sdapi/v1/img2img')
-        path_base = self.path.split('?')[0]
         timeout = None if path_base in gen_paths else 60
 
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = resp.read()
+                if ui_save_type:
+                    self._server_save_images(data, str(ui_save_type))
                 self.send_response(resp.status)
                 self.send_header('Content-Type', resp.headers.get('Content-Type', 'application/json'))
                 self.send_header('Content-Length', str(len(data)))
@@ -446,6 +459,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(data)
         except Exception as e:
             self.send_error(502, str(e))
+
+    def _server_save_images(self, response_body, img_type):
+        """Save generated images to disk server-side — works regardless of tab visibility."""
+        try:
+            images = json.loads(response_body).get('images', [])
+            if not images:
+                return
+            img_type = ''.join(c for c in img_type if c.isalnum() or c == '_') or 'output'
+            out_dir  = os.path.join(DIR, 'outputs', img_type)
+            os.makedirs(out_dir, exist_ok=True)
+            ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            for b64 in images:
+                n = 1
+                while True:
+                    fname = f'{ts}_{n:03d}.png'
+                    if not os.path.exists(os.path.join(out_dir, fname)):
+                        break
+                    n += 1
+                with open(os.path.join(out_dir, fname), 'wb') as f:
+                    f.write(base64.b64decode(b64))
+        except Exception:
+            pass
 
     def _static(self, path):
         if path in ('/', ''):
