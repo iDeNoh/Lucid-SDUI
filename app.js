@@ -22,10 +22,8 @@ const Log = (() => {
   }
 
   function _updateBadge() {
-    const badge = document.getElementById('log-err-count');
-    if (!badge) return;
-    badge.textContent = errCount;
-    badge.style.display = errCount > 0 ? 'inline' : 'none';
+    [document.getElementById('log-err-count'), document.getElementById('km-err-count')]
+      .forEach(b => { if (b) { b.textContent = errCount; b.style.display = errCount > 0 ? 'inline' : 'none'; } });
   }
 
   function _appendToDOM(entry) {
@@ -1753,6 +1751,30 @@ function initEvents() {
   $('btn-history').addEventListener('click', openHistoryPanel);
   $('history-close').addEventListener('click', closeHistoryPanel);
   $('history-panel').addEventListener('click', e => { if (e.target === $('history-panel')) closeHistoryPanel(); });
+
+  // Kebab menu (mobile)
+  const kebabActions = {
+    refresh:   () => $('btn-refresh').click(),
+    wildcards: () => openWildcardsPanel(),
+    media:     () => openMediaBrowser(),
+    history:   () => openHistoryPanel(),
+    log:       () => $('btn-log-panel').click(),
+  };
+  $('btn-kebab').addEventListener('click', e => {
+    e.stopPropagation();
+    const menu = $('kebab-menu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  });
+  $$('.kebab-item').forEach(item => {
+    item.addEventListener('click', () => {
+      $('kebab-menu').style.display = 'none';
+      const fn = kebabActions[item.dataset.action];
+      if (fn) fn();
+    });
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.kebab-wrap')) $('kebab-menu').style.display = 'none';
+  });
 
   // Wildcards panel
   $('btn-wildcards').addEventListener('click', openWildcardsPanel);

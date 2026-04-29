@@ -22,13 +22,27 @@
       </div>
     </div>
     <div class="header-right">
-      <button id="btn-refresh" class="btn-sm btn-ghost">⟳ Refresh</button>
-      <button id="btn-wildcards" class="btn-sm btn-ghost" title="Edit wildcard files">Wildcards</button>
-      <button id="btn-media" class="btn-sm btn-ghost" title="Browse saved images">Media</button>
-      <button id="btn-history" class="btn-sm btn-ghost" title="Previous generations">History</button>
-      <button id="btn-log-panel" class="btn-sm btn-ghost log-btn" title="View / download log">
+      <!-- Desktop: individual buttons -->
+      <button id="btn-refresh"   class="btn-sm btn-ghost header-btn-desktop">⟳ Refresh</button>
+      <button id="btn-wildcards" class="btn-sm btn-ghost header-btn-desktop" title="Edit wildcard files">Wildcards</button>
+      <button id="btn-media"     class="btn-sm btn-ghost header-btn-desktop" title="Browse saved images">Media</button>
+      <button id="btn-history"   class="btn-sm btn-ghost header-btn-desktop" title="Previous generations">History</button>
+      <button id="btn-log-panel" class="btn-sm btn-ghost log-btn header-btn-desktop" title="View / download log">
         Log <span id="log-err-count" class="log-err-badge" style="display:none">0</span>
       </button>
+      <!-- Mobile: kebab menu -->
+      <div class="kebab-wrap">
+        <button id="btn-kebab" class="btn-sm btn-ghost kebab-trigger" title="Menu">⋮</button>
+        <div id="kebab-menu" class="kebab-menu" style="display:none">
+          <button class="kebab-item" data-action="refresh">⟳ Refresh</button>
+          <button class="kebab-item" data-action="wildcards">Wildcards</button>
+          <button class="kebab-item" data-action="media">Media</button>
+          <button class="kebab-item" data-action="history">History</button>
+          <button class="kebab-item kebab-log" data-action="log">
+            Log <span id="km-err-count" class="log-err-badge" style="display:none">0</span>
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
