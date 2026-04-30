@@ -1109,10 +1109,20 @@ async function pollProgress() {
     const pct   = Math.round((p.progress || 0) * 100);
     const step  = p.state?.sampling_step  || 0;
     const steps = p.state?.sampling_steps || 0;
-    console.log(`[poll] ${pct}% step=${step}/${steps} img=${p.current_image ? 'yes' : 'null'}`);
+    const job   = (p.state?.job || '').toLowerCase();
+    const info  = (p.textinfo || '').toLowerCase();
+    let opLabel = '';
+    if (job.includes('hires') || info.includes('hires') || job.includes('upscal') || info.includes('upscal')) {
+      opLabel = 'Hi-Res · ';
+    } else if (job.includes('detail') || info.includes('detail') || job.includes('refin') || info.includes('refin')) {
+      opLabel = 'Detail · ';
+    } else if (step > 0 || pct > 0) {
+      opLabel = 'Base · ';
+    }
+    console.log(`[poll] ${pct}% step=${step}/${steps} job=${p.state?.job} img=${p.current_image ? 'yes' : 'null'}`);
 
     $('progress-fill').style.width = pct + '%';
-    $('progress-text').textContent = steps > 0 ? `${pct}% — step ${step}/${steps}` : `${pct}%`;
+    $('progress-text').textContent = steps > 0 ? `${opLabel}${pct}% — step ${step}/${steps}` : `${opLabel}${pct}%`;
     if (p.eta_relative > 0) $('progress-eta').textContent = `ETA: ${p.eta_relative.toFixed(1)}s`;
 
     if (p.current_image) {
@@ -1867,7 +1877,7 @@ function initEvents() {
 
   // Seed buttons
   $('btn-rand-seed').addEventListener('click', () => {
-    $('inp-seed').value = Math.floor(Math.random() * 0xFFFFFFFF);
+    $('inp-seed').value = -1;
   });
   $('btn-last-seed').addEventListener('click', () => {
     if (state.lastSeed >= 0) { $('inp-seed').value = state.lastSeed; toast('Seed: ' + state.lastSeed, 'info'); }
