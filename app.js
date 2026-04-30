@@ -541,7 +541,8 @@ async function generate() {
     };
     if ($('t2i-hires').checked) {
       params.enable_hr             = true;
-      params.hr_force              = true;
+      params.hr_force              = $('t2i-hires-force').checked;
+      params.hr_resize_mode        = +$('sel-hires-resize-mode').value;
       params.hr_scale              = +$('range-hires-scale').value;
       params.hr_denoising_strength = +$('range-hires-denoise').value;
       params.hr_upscaler           = $('sel-hires-upscaler').value;
@@ -926,7 +927,7 @@ function confirmSaveStyle() {
     if (!style) { toast('Style not found', 'warn'); return; }
     // Clear all captured fields before re-writing from current checkboxes
     ['prompt','negative_prompt','sampler','steps','width','height',
-     'hires_enabled','hires_scale','hires_denoise','hires_upscaler','hires_steps',
+     'hires_enabled','hires_scale','hires_denoise','hires_upscaler','hires_steps','hires_resize_mode','hires_force',
      'detailer_enabled','detailer_model','detailer_strength','detailer_conf','detailer_steps','detailer_res']
       .forEach(k => delete style[k]);
   } else {
@@ -952,11 +953,13 @@ function confirmSaveStyle() {
     style.height = +$('inp-height').value;
   }
   if ($('sc-hires').checked) {
-    style.hires_enabled  = $('t2i-hires').checked;
-    style.hires_scale    = +$('range-hires-scale').value;
-    style.hires_denoise  = +$('range-hires-denoise').value;
-    style.hires_upscaler = $('sel-hires-upscaler').value;
-    style.hires_steps    = +$('inp-hires-steps').value;
+    style.hires_enabled     = $('t2i-hires').checked;
+    style.hires_scale       = +$('range-hires-scale').value;
+    style.hires_denoise     = +$('range-hires-denoise').value;
+    style.hires_upscaler    = $('sel-hires-upscaler').value;
+    style.hires_steps       = +$('inp-hires-steps').value;
+    style.hires_resize_mode = +$('sel-hires-resize-mode').value;
+    style.hires_force       = $('t2i-hires-force').checked;
   }
   if ($('sc-detailer').checked) {
     style.detailer_enabled  = $('t2i-detailer').checked;
@@ -1060,10 +1063,12 @@ function applyStyle(style) {
   if ('hires_enabled' in style) {
     $('t2i-hires').checked          = style.hires_enabled;
     $('hires-params').style.display = style.hires_enabled ? 'flex' : 'none';
-    if ('hires_scale'    in style) setSlider('range-hires-scale',   'val-hires-scale',   style.hires_scale,   v => v.toFixed(1));
-    if ('hires_denoise'  in style) setSlider('range-hires-denoise', 'val-hires-denoise', style.hires_denoise, v => v.toFixed(2));
-    if ('hires_upscaler' in style) $('sel-hires-upscaler').value = style.hires_upscaler;
-    if ('hires_steps'    in style) $('inp-hires-steps').value    = style.hires_steps;
+    if ('hires_scale'       in style) setSlider('range-hires-scale',   'val-hires-scale',   style.hires_scale,   v => v.toFixed(1));
+    if ('hires_denoise'     in style) setSlider('range-hires-denoise', 'val-hires-denoise', style.hires_denoise, v => v.toFixed(2));
+    if ('hires_upscaler'    in style) $('sel-hires-upscaler').value      = style.hires_upscaler;
+    if ('hires_steps'       in style) $('inp-hires-steps').value         = style.hires_steps;
+    if ('hires_resize_mode' in style) $('sel-hires-resize-mode').value   = style.hires_resize_mode;
+    if ('hires_force'       in style) $('t2i-hires-force').checked       = style.hires_force;
   }
   if ('detailer_enabled' in style) {
     $('t2i-detailer').checked             = style.detailer_enabled;
