@@ -1051,11 +1051,13 @@ function stopGen() {
 
   setStatus(true);
   setTimeout(() => {
-    if (state.generating) return; // loop already started next generation
+    if (state.generating) return;
     $('progress-area').style.display = 'none';
-    $('live-preview').style.display  = 'none';
     $('progress-fill').style.width   = '0%';
-    $('live-preview-img').src        = '';
+    // Keep live preview visible showing the final image; hide only if no image arrived
+    if ($('live-preview-img').style.display === 'none') {
+      $('live-preview').style.display = 'none';
+    }
   }, 700);
 }
 
@@ -1108,6 +1110,12 @@ function handleResult(result, fps = 0, type = 'txt2img') {
   } else {
     images.forEach(img => addImageToGallery(img, infoStr));
     toast(`Generated ${images.length} image(s) — seed ${info.seed ?? '?'}`, 'success');
+    // Show final image in live preview (replaces blurry progress frame)
+    const lpImg = $('live-preview-img');
+    lpImg.src = 'data:image/png;base64,' + images[0];
+    lpImg.style.display = 'block';
+    $('live-preview-placeholder').style.display = 'none';
+    $('live-preview').style.display = 'flex';
   }
 
   updateGalleryCount();

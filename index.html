@@ -376,6 +376,15 @@
         </div>
       </div>
 
+      <!-- Live preview shown while generating -->
+      <div id="live-preview" class="live-preview-panel" style="display:none">
+        <div id="live-preview-placeholder" class="live-preview-placeholder">
+          <div class="live-preview-spinner"></div>
+          <span>Waiting for first frame…</span>
+        </div>
+        <img id="live-preview-img" src="" alt="Preview" style="display:none">
+      </div>
+
       <!-- Generate controls -->
       <div class="gen-controls">
         <button id="btn-generate" class="btn-generate">Generate <span class="key-hint">Ctrl+Enter</span></button>
@@ -408,14 +417,6 @@
           </label>
           <button id="btn-clear-gallery" class="btn-sm btn-ghost">Clear</button>
         </div>
-      </div>
-      <!-- Live preview shown while generating -->
-      <div id="live-preview" class="live-preview-panel" style="display:none">
-        <div id="live-preview-placeholder" class="live-preview-placeholder">
-          <div class="live-preview-spinner"></div>
-          <span>Waiting for first frame…</span>
-        </div>
-        <img id="live-preview-img" src="" alt="Preview" style="display:none">
       </div>
       <div class="gallery-wrap">
         <div id="gallery" class="gallery"></div>
