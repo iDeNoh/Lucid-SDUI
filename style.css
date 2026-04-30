@@ -1633,7 +1633,18 @@ button {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.style-save-body { padding: 16px; }
+.style-save-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.style-thumb-row { display: flex; flex-direction: column; gap: 6px; }
+.style-thumb-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.style-thumb-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .style-field-checks {
   display: flex;
   flex-direction: column;
@@ -1717,19 +1728,30 @@ button {
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: 11px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
   transition: border-color 0.12s;
 }
 .style-card:hover { border-color: var(--border-hi); }
 .style-card-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+.style-card-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--r);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.style-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .style-card-name {
-  flex: 1;
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;

@@ -210,39 +210,53 @@ let modalZoom0     = 1;
 
 // ===== Generation History =====
 
-const HISTORY_KEY  = 'lucid-sdui-history';
-const HISTORY_MAX  = 30;
-const SAVE_KEY     = 'lucid-sdui-save';
-const STYLES_KEY   = 'lucid-sdui-styles';
+const HISTORY_MAX = 30;
+const SAVE_KEY    = 'lucid-sdui-save';
 
-function loadHistory() {
+async function loadHistory() {
   try {
-    const stored = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    // Migrate: old entries stored raw b64 (no data: prefix); drop them so they don't bloat storage
-    state.genHistory = stored.filter(e => !e.thumb || e.thumb.startsWith('data:'));
+    const r = await fetch('/history');
+    state.genHistory = r.ok ? (await r.json()) : [];
   } catch { state.genHistory = []; }
 }
 
-function saveHistory(entry) {
+async function saveHistory(entry) {
   state.genHistory.unshift(entry);
   if (state.genHistory.length > HISTORY_MAX) state.genHistory.length = HISTORY_MAX;
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(state.genHistory)); }
-  catch (e) { Log.warn('History', 'localStorage write failed — history may not persist', e.message); }
+  try {
+    await fetch('/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.genHistory),
+    });
+  } catch (e) { Log.warn('History', 'History save failed', e.message); }
+}
+
+function _thumbnailFromImage(img, maxPx) {
+  const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(img.width  * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.7);
 }
 
 function makeThumbnail(b64, maxPx = 128) {
   return new Promise(resolve => {
     const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
-      const canvas = document.createElement('canvas');
-      canvas.width  = Math.round(img.width  * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
-    };
+    img.onload  = () => resolve(_thumbnailFromImage(img, maxPx));
     img.onerror = () => resolve('');
     img.src = 'data:image/png;base64,' + b64;
+  });
+}
+
+function makeThumbnail_file(file, maxPx = 256) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img  = new Image();
+    img.onload  = () => { resolve(_thumbnailFromImage(img, maxPx)); URL.revokeObjectURL(url); };
+    img.onerror = () => { resolve(''); URL.revokeObjectURL(url); };
+    img.src = url;
   });
 }
 
@@ -839,18 +853,26 @@ async function newWildcardFolder() {
 
 // ===== Styles =====
 
-function loadStyles() {
-  try { state.styles = JSON.parse(localStorage.getItem(STYLES_KEY)) || []; }
-  catch { state.styles = []; }
+async function loadStyles() {
+  try {
+    const r = await fetch('/styles');
+    state.styles = r.ok ? (await r.json()) : [];
+  } catch { state.styles = []; }
 }
 
-function saveStyles() {
-  try { localStorage.setItem(STYLES_KEY, JSON.stringify(state.styles)); }
-  catch (e) { Log.warn('Styles', 'Failed to save styles', e.message); }
+async function saveStyles() {
+  try {
+    await fetch('/styles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.styles),
+    });
+  } catch (e) { Log.warn('Styles', 'Failed to save styles', e.message); }
 }
 
 function openSaveStyleDialog() {
   $('style-name-input').value = '';
+  clearStyleThumb();
   $('style-save-dialog').style.display = 'flex';
   setTimeout(() => $('style-name-input').focus(), 50);
 }
@@ -859,11 +881,24 @@ function closeSaveStyleDialog() {
   $('style-save-dialog').style.display = 'none';
 }
 
+function clearStyleThumb() {
+  $('style-thumb-img').src = '';
+  $('style-thumb-preview').style.display = 'none';
+  $('style-thumb-pick').style.display = '';
+}
+
+function setStyleThumb(dataUrl) {
+  $('style-thumb-img').src = dataUrl;
+  $('style-thumb-preview').style.display = 'block';
+  $('style-thumb-pick').style.display = 'none';
+}
+
 function confirmSaveStyle() {
   const name = $('style-name-input').value.trim();
   if (!name) { toast('Enter a name for this style', 'warn'); $('style-name-input').focus(); return; }
 
-  const style = { id: Date.now(), name };
+  const thumbSrc = $('style-thumb-img').src;
+  const style = { id: Date.now(), name, thumb: thumbSrc || null };
 
   if ($('sc-prompt').checked) {
     const el = activePromptEl();
@@ -941,12 +976,15 @@ function renderStyleBrowser() {
 
     card.innerHTML = `
       <div class="style-card-top">
-        <span class="style-card-name">${escapeHtml(style.name)}</span>
+        ${style.thumb ? `<img class="style-card-thumb" src="${escapeHtml(style.thumb)}" alt="">` : ''}
+        <div class="style-card-info">
+          <span class="style-card-name">${escapeHtml(style.name)}</span>
+          <div class="style-card-tags">${fieldTags.map(t => `<span class="style-tag">${escapeHtml(t)}</span>`).join('')}</div>
+          ${preview ? `<div class="style-card-preview">${escapeHtml(preview)}</div>` : ''}
+        </div>
         <button class="btn-sm btn-secondary style-apply-btn">Apply</button>
         <button class="btn-icon style-delete-btn" title="Delete style">✕</button>
       </div>
-      <div class="style-card-tags">${fieldTags.map(t => `<span class="style-tag">${escapeHtml(t)}</span>`).join('')}</div>
-      ${preview ? `<div class="style-card-preview">${escapeHtml(preview)}</div>` : ''}
     `;
 
     card.querySelector('.style-apply-btn').addEventListener('click', () => {
@@ -1975,6 +2013,15 @@ function initEvents() {
   $('style-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmSaveStyle(); });
   $('styles-browser-close').addEventListener('click', closeStyleBrowser);
   $('styles-browser-overlay').addEventListener('click', closeStyleBrowser);
+  // Style thumbnail picker
+  $('style-thumb-pick').addEventListener('click', () => $('style-thumb-file').click());
+  $('style-thumb-file').addEventListener('change', () => {
+    const file = $('style-thumb-file').files[0];
+    if (!file) return;
+    makeThumbnail_file(file).then(url => { if (url) setStyleThumb(url); });
+    $('style-thumb-file').value = '';
+  });
+  $('style-thumb-clear').addEventListener('click', e => { e.stopPropagation(); clearStyleThumb(); });
 
   // Wildcards panel
   $('btn-wildcards').addEventListener('click', openWildcardsPanel);
@@ -2131,9 +2178,8 @@ function escapeHtml(str) {
 
 // ===== Boot =====
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadHistory();
-  loadStyles();
+document.addEventListener('DOMContentLoaded', async () => {
+  await Promise.all([loadHistory(), loadStyles()]);
   initModalZoom();
   const saveCb = $('save-to-disk');
   if (saveCb) {

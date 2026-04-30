@@ -554,6 +554,14 @@
         <label>Name</label>
         <input type="text" id="style-name-input" class="full-width" placeholder="My Style">
       </div>
+      <div class="style-thumb-row">
+        <div id="style-thumb-preview" class="style-thumb-preview" style="display:none">
+          <img id="style-thumb-img" src="" alt="">
+          <button id="style-thumb-clear" class="btn-clear" type="button">✕</button>
+        </div>
+        <button id="style-thumb-pick" class="btn-sm btn-ghost" type="button" style="width:100%">+ Add preview image (optional)</button>
+        <input type="file" id="style-thumb-file" accept="image/*" style="display:none">
+      </div>
       <div class="section-label" style="margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em">Include fields</div>
       <div class="style-field-checks">
         <label class="style-check-row"><input type="checkbox" id="sc-prompt" checked> Positive Prompt</label>

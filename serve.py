@@ -23,6 +23,8 @@ PORT = 8080
 API_TARGET = 'http://localhost:7860'
 DIR = os.path.dirname(os.path.abspath(__file__))
 WILDCARDS_DIR = os.path.join(DIR, 'extras', 'wildcards')
+STYLES_FILE   = os.path.join(DIR, 'extras', 'styles.json')
+HISTORY_FILE  = os.path.join(DIR, 'extras', 'history.json')
 
 MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -42,6 +44,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._output_meta()
         elif path == '/outputs':
             self._list_outputs()
+        elif path == '/styles':
+            self._data_get(STYLES_FILE)
+        elif path == '/history':
+            self._data_get(HISTORY_FILE)
         elif path == '/wildcards':
             self._wc_list()
         elif path == '/wildcards/content':
@@ -182,6 +188,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/save':
             self._save()
+        elif self.path == '/styles':
+            self._data_save(STYLES_FILE)
+        elif self.path == '/history':
+            self._data_save(HISTORY_FILE)
         elif self.path.startswith('/sdapi/'):
             self._proxy()
         elif self.path == '/wildcards/save':
@@ -231,6 +241,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(resp)))
         self.end_headers()
         self.wfile.write(resp)
+
+    # ── Persistent data (styles, history) ────────────────────────────────────
+
+    def _data_get(self, filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                self._send_json(json.load(f))
+        except FileNotFoundError:
+            self._send_json([])
+        except Exception:
+            self._send_json([])
+
+    def _data_save(self, filepath):
+        data = self._read_json_body()
+        if data is None:
+            self.send_error(400, 'Bad JSON')
+            return
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        self._send_json({'ok': True})
 
     # ── Wildcard helpers ──────────────────────────────────────────────────────
 
