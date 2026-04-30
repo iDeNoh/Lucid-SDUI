@@ -752,21 +752,24 @@ button {
 .gallery-count { font-size: 10px; color: var(--text-muted); font-family: var(--mono); }
 
 /* ===== Gallery ===== */
+.gallery-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.gallery-wrap::-webkit-scrollbar { width: 4px; }
+.gallery-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
 .gallery {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 5px;
   padding: 8px;
-  overflow-y: auto;
-  align-content: start;
-  flex: 1;
-  min-height: 0; /* allows flex item to shrink below content so overflow-y scroll works */
 }
-.gallery::-webkit-scrollbar { width: 4px; }
-.gallery::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .gallery-item {
   position: relative;
+  aspect-ratio: 1;
   border-radius: var(--r);
   overflow: hidden;
   cursor: pointer;
@@ -774,19 +777,12 @@ button {
   border: 1px solid transparent;
   transition: border-color 0.15s, transform 0.1s;
 }
-.gallery-item::before {
-  content: '';
-  display: block;
-  padding-top: 100%;
-}
 .gallery-item:hover {
   border-color: var(--accent);
   transform: scale(1.02);
   z-index: 1;
 }
 .gallery-item img {
-  position: absolute;
-  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1296,11 +1292,8 @@ button {
     max-height: none;
     overflow: visible;
   }
-  .gallery {
-    grid-template-columns: repeat(3, 1fr);
-    max-height: 360px;
-    overflow-y: auto;
-  }
+  .gallery { grid-template-columns: repeat(3, 1fr); }
+  .gallery-wrap { max-height: 360px; }
 
   /* ---- Sidebar: fixed overlay, slides in from left ---- */
   .sidebar {
