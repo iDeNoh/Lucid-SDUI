@@ -1,6 +1,8 @@
-# SDNext UI
+# Lucid-SDUI
 
 A lightweight web frontend for [SDNext](https://github.com/vladmandic/automatic). Runs alongside SDNext and gives you a clean interface for generating images and video from any browser, including on mobile over LAN.
+
+![Lucid-SDUI screenshot](docs/screenshot.png)
 
 ## Requirements
 
@@ -21,9 +23,13 @@ For LAN access (phone, tablet, etc.) use the IP address printed in the terminal 
 ## Features
 
 - txt2img, img2img, video generation
-- Live generation previews
-- LoRA browser with search
+- Live generation preview (persists final image between generations)
+- Styles system — save and apply named presets for prompts, sampler, steps, resolution, hi-res fix, and detailer settings
+- LoRA browser with search and weight control
+- Wildcard editor with folder support
+- Media browser for saved outputs
 - PNG info reader
+- Image captioning and tagging
 - Image upscaling
 - Generation history with parameter restore
 - Session log with download
