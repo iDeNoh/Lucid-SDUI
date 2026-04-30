@@ -282,6 +282,11 @@ async function saveImageToDisk(b64, type) {
 const $  = id  => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 
+function setSlider(rangeId, valId, value, fmt) {
+  $(rangeId).value = value;
+  $(valId).textContent = fmt ? fmt(+value) : String(value);
+}
+
 function setStatus(connected, label) {
   state.connected = connected;
   const dot  = $('status-dot');
@@ -475,9 +480,12 @@ function injectLora(name, weight) {
   toast(`Injected: ${name}`, 'info');
 }
 
-function activePromptEl() {
-  return { txt2img: $('t2i-prompt'), img2img: $('i2i-prompt'), video: $('vid-prompt') }[state.currentTab] || null;
+function activeTabEl(suffix) {
+  const prefix = { txt2img: 't2i', img2img: 'i2i', video: 'vid' }[state.currentTab];
+  return prefix ? $(prefix + suffix) : null;
 }
+function activePromptEl()   { return activeTabEl('-prompt'); }
+function activeNegativeEl() { return activeTabEl('-negative'); }
 
 // ===== Generation params =====
 
@@ -841,10 +849,6 @@ function saveStyles() {
   catch (e) { Log.warn('Styles', 'Failed to save styles', e.message); }
 }
 
-function activeNegativeEl() {
-  return { txt2img: $('t2i-negative'), img2img: $('i2i-negative'), video: $('vid-negative') }[state.currentTab] || null;
-}
-
 function openSaveStyleDialog() {
   $('style-name-input').value = '';
   $('style-save-dialog').style.display = 'flex';
@@ -970,28 +974,25 @@ function applyStyle(style) {
     const opt = Array.from($('sel-sampler').options).find(o => o.value === style.sampler);
     if (opt) $('sel-sampler').value = style.sampler;
   }
-  if ('steps' in style) {
-    $('range-steps').value     = style.steps;
-    $('val-steps').textContent = String(style.steps);
-  }
+  if ('steps' in style)  setSlider('range-steps', 'val-steps', style.steps);
   if ('width'  in style) $('inp-width').value  = style.width;
   if ('height' in style) $('inp-height').value = style.height;
   if ('hires_enabled' in style) {
-    $('t2i-hires').checked             = style.hires_enabled;
-    $('hires-params').style.display    = style.hires_enabled ? 'flex' : 'none';
-    if ('hires_scale'    in style) { $('range-hires-scale').value   = style.hires_scale;   $('val-hires-scale').textContent   = style.hires_scale.toFixed(1); }
-    if ('hires_denoise'  in style) { $('range-hires-denoise').value = style.hires_denoise; $('val-hires-denoise').textContent = style.hires_denoise.toFixed(2); }
+    $('t2i-hires').checked          = style.hires_enabled;
+    $('hires-params').style.display = style.hires_enabled ? 'flex' : 'none';
+    if ('hires_scale'    in style) setSlider('range-hires-scale',   'val-hires-scale',   style.hires_scale,   v => v.toFixed(1));
+    if ('hires_denoise'  in style) setSlider('range-hires-denoise', 'val-hires-denoise', style.hires_denoise, v => v.toFixed(2));
     if ('hires_upscaler' in style) $('sel-hires-upscaler').value = style.hires_upscaler;
-    if ('hires_steps'    in style) $('inp-hires-steps').value     = style.hires_steps;
+    if ('hires_steps'    in style) $('inp-hires-steps').value    = style.hires_steps;
   }
   if ('detailer_enabled' in style) {
-    $('t2i-detailer').checked              = style.detailer_enabled;
-    $('detailer-params').style.display     = style.detailer_enabled ? 'flex' : 'none';
-    if ('detailer_model'    in style) $('sel-detailer-model').value            = style.detailer_model;
-    if ('detailer_strength' in style) { $('range-detailer-strength').value     = style.detailer_strength; $('val-detailer-strength').textContent = style.detailer_strength.toFixed(2); }
-    if ('detailer_conf'     in style) { $('range-detailer-conf').value         = style.detailer_conf;     $('val-detailer-conf').textContent     = style.detailer_conf.toFixed(2); }
-    if ('detailer_steps'    in style) $('inp-detailer-steps').value            = style.detailer_steps;
-    if ('detailer_res'      in style) $('inp-detailer-res').value              = style.detailer_res;
+    $('t2i-detailer').checked             = style.detailer_enabled;
+    $('detailer-params').style.display    = style.detailer_enabled ? 'flex' : 'none';
+    if ('detailer_model'    in style) $('sel-detailer-model').value = style.detailer_model;
+    if ('detailer_strength' in style) setSlider('range-detailer-strength', 'val-detailer-strength', style.detailer_strength, v => v.toFixed(2));
+    if ('detailer_conf'     in style) setSlider('range-detailer-conf',     'val-detailer-conf',     style.detailer_conf,     v => v.toFixed(2));
+    if ('detailer_steps'    in style) $('inp-detailer-steps').value = style.detailer_steps;
+    if ('detailer_res'      in style) $('inp-detailer-res').value   = style.detailer_res;
   }
   toast('Style applied: ' + style.name, 'success');
   Log.info('Styles', 'Applied style: ' + style.name);
@@ -1642,8 +1643,8 @@ function sendPNGInfoToT2i() {
 
   if (promptMatch) $('t2i-prompt').value   = promptMatch[1].trim();
   if (negMatch)    $('t2i-negative').value = negMatch[1].trim();
-  if (stepsMatch)  { $('range-steps').value = stepsMatch[1];  $('val-steps').textContent = stepsMatch[1]; }
-  if (cfgMatch)    { $('range-cfg').value   = cfgMatch[1];    $('val-cfg').textContent = (+cfgMatch[1]).toFixed(1); }
+  if (stepsMatch)  setSlider('range-steps', 'val-steps', stepsMatch[1]);
+  if (cfgMatch)    setSlider('range-cfg',   'val-cfg',   cfgMatch[1], v => v.toFixed(1));
   if (seedMatch)   $('inp-seed').value      = seedMatch[1];
   if (sizeMatch)   { $('inp-width').value = sizeMatch[1]; $('inp-height').value = sizeMatch[2]; }
   if (samplerMatch) {
@@ -2090,20 +2091,17 @@ function closeHistoryPanel() {
 function restoreFromHistory(entry) {
   const p = entry.params;
 
-  // Switch to the right tab
   switchTab(entry.tab === 'img2img' ? 'img2img' : entry.tab === 'video' ? 'video' : 'txt2img');
 
-  // Common sidebar params
   if (p.sampler_name) $('sel-sampler').value = p.sampler_name;
-  if (p.steps)        { $('range-steps').value = p.steps; $('val-steps').textContent = p.steps; }
-  if (p.cfg_scale)    { $('range-cfg').value = p.cfg_scale; $('val-cfg').textContent = p.cfg_scale; }
-  if (p.width)        $('inp-width').value  = p.width;
+  if (p.steps)     setSlider('range-steps', 'val-steps', p.steps);
+  if (p.cfg_scale) setSlider('range-cfg',   'val-cfg',   p.cfg_scale);
+  if (p.width)     $('inp-width').value  = p.width;
   if (p.height)       $('inp-height').value = p.height;
   if (p.seed != null) $('inp-seed').value   = p.seed >= 0 ? p.seed : -1;
   if (p.batch_size)   $('inp-batch-size').value  = p.batch_size;
   if (p.n_iter)       $('inp-batch-count').value = p.n_iter;
 
-  // Prompt fields per tab
   if (entry.tab === 'txt2img') {
     if (p.prompt)          $('t2i-prompt').value    = p.prompt;
     if (p.negative_prompt !== undefined) $('t2i-negative').value  = p.negative_prompt;
@@ -2113,7 +2111,7 @@ function restoreFromHistory(entry) {
   } else if (entry.tab === 'video') {
     if (p.prompt)          $('vid-prompt').value    = p.prompt;
     if (p.negative_prompt !== undefined) $('vid-negative').value  = p.negative_prompt;
-    if (p.num_frames)      { $('range-frames').value = p.num_frames; $('val-frames').textContent = p.num_frames; }
+    if (p.num_frames) setSlider('range-frames', 'val-frames', p.num_frames);
   }
 
   toast('Parameters restored', 'success');
