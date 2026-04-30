@@ -760,19 +760,24 @@ button {
   overflow-y: auto;
   align-content: start;
   flex: 1;
+  min-height: 0; /* allows flex item to shrink below content so overflow-y scroll works */
 }
 .gallery::-webkit-scrollbar { width: 4px; }
 .gallery::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .gallery-item {
   position: relative;
-  aspect-ratio: 1;
   border-radius: var(--r);
   overflow: hidden;
   cursor: pointer;
   background: var(--bg-card);
   border: 1px solid transparent;
   transition: border-color 0.15s, transform 0.1s;
+}
+.gallery-item::before {
+  content: '';
+  display: block;
+  padding-top: 100%;
 }
 .gallery-item:hover {
   border-color: var(--accent);
