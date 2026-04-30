@@ -52,7 +52,7 @@ const Log = (() => {
     const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
     const a    = document.createElement('a');
     a.href     = URL.createObjectURL(blob);
-    a.download = `sdnext-ui-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.log`;
+    a.download = `lucid-sdui-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.log`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -194,6 +194,7 @@ const state = {
   looping:       false,
   wcCurrentPath: null,
   wcDirty:       false,
+  styles:        [],
 };
 
 // ===== Modal zoom/pan state =====
@@ -209,9 +210,10 @@ let modalZoom0     = 1;
 
 // ===== Generation History =====
 
-const HISTORY_KEY  = 'sdnext-ui-history';
+const HISTORY_KEY  = 'lucid-sdui-history';
 const HISTORY_MAX  = 30;
-const SAVE_KEY     = 'sdnext-ui-save';
+const SAVE_KEY     = 'lucid-sdui-save';
+const STYLES_KEY   = 'lucid-sdui-styles';
 
 function loadHistory() {
   try {
@@ -825,6 +827,181 @@ async function newWildcardFolder() {
   } catch (e) {
     toast('Create folder failed: ' + e.message, 'error');
   }
+}
+
+// ===== Styles =====
+
+function loadStyles() {
+  try { state.styles = JSON.parse(localStorage.getItem(STYLES_KEY)) || []; }
+  catch { state.styles = []; }
+}
+
+function saveStyles() {
+  try { localStorage.setItem(STYLES_KEY, JSON.stringify(state.styles)); }
+  catch (e) { Log.warn('Styles', 'Failed to save styles', e.message); }
+}
+
+function activeNegativeEl() {
+  return { txt2img: $('t2i-negative'), img2img: $('i2i-negative'), video: $('vid-negative') }[state.currentTab] || null;
+}
+
+function openSaveStyleDialog() {
+  $('style-name-input').value = '';
+  $('style-save-dialog').style.display = 'flex';
+  setTimeout(() => $('style-name-input').focus(), 50);
+}
+
+function closeSaveStyleDialog() {
+  $('style-save-dialog').style.display = 'none';
+}
+
+function confirmSaveStyle() {
+  const name = $('style-name-input').value.trim();
+  if (!name) { toast('Enter a name for this style', 'warn'); $('style-name-input').focus(); return; }
+
+  const style = { id: Date.now(), name };
+
+  if ($('sc-prompt').checked) {
+    const el = activePromptEl();
+    if (el) style.prompt = el.value;
+  }
+  if ($('sc-negative').checked) {
+    const el = activeNegativeEl();
+    if (el) style.negative_prompt = el.value;
+  }
+  if ($('sc-sampler').checked)     style.sampler = $('sel-sampler').value;
+  if ($('sc-steps').checked)       style.steps   = +$('range-steps').value;
+  if ($('sc-resolution').checked) {
+    style.width  = +$('inp-width').value;
+    style.height = +$('inp-height').value;
+  }
+  if ($('sc-hires').checked) {
+    style.hires_enabled  = $('t2i-hires').checked;
+    style.hires_scale    = +$('range-hires-scale').value;
+    style.hires_denoise  = +$('range-hires-denoise').value;
+    style.hires_upscaler = $('sel-hires-upscaler').value;
+    style.hires_steps    = +$('inp-hires-steps').value;
+  }
+  if ($('sc-detailer').checked) {
+    style.detailer_enabled  = $('t2i-detailer').checked;
+    style.detailer_model    = $('sel-detailer-model').value;
+    style.detailer_strength = +$('range-detailer-strength').value;
+    style.detailer_conf     = +$('range-detailer-conf').value;
+    style.detailer_steps    = +$('inp-detailer-steps').value;
+    style.detailer_res      = +$('inp-detailer-res').value;
+  }
+
+  state.styles.unshift(style);
+  saveStyles();
+  closeSaveStyleDialog();
+  toast('Style saved: ' + name, 'success');
+  Log.info('Styles', 'Saved style: ' + name);
+}
+
+function openStyleBrowser() {
+  renderStyleBrowser();
+  $('styles-browser').style.display = 'flex';
+}
+
+function closeStyleBrowser() {
+  $('styles-browser').style.display = 'none';
+}
+
+function renderStyleBrowser() {
+  const list = $('styles-list');
+  list.innerHTML = '';
+
+  if (!state.styles.length) {
+    list.innerHTML = '<div class="styles-empty">No styles saved yet.<br>Use "◈ Save Style" near the prompt to create one.</div>';
+    return;
+  }
+
+  state.styles.forEach(style => {
+    const card = document.createElement('div');
+    card.className = 'style-card';
+
+    const fieldTags = [];
+    if ('prompt'           in style) fieldTags.push('prompt');
+    if ('negative_prompt'  in style) fieldTags.push('negative');
+    if ('sampler'          in style) fieldTags.push('sampler: ' + style.sampler);
+    if ('steps'            in style) fieldTags.push('steps: ' + style.steps);
+    if ('width'            in style) fieldTags.push(style.width + '×' + style.height);
+    if ('hires_enabled'    in style) fieldTags.push('hires');
+    if ('detailer_enabled' in style) fieldTags.push('detailer');
+
+    const preview = 'prompt' in style
+      ? style.prompt.slice(0, 90) + (style.prompt.length > 90 ? '…' : '')
+      : 'negative_prompt' in style
+        ? 'neg: ' + style.negative_prompt.slice(0, 90)
+        : '';
+
+    card.innerHTML = `
+      <div class="style-card-top">
+        <span class="style-card-name">${escapeHtml(style.name)}</span>
+        <button class="btn-sm btn-secondary style-apply-btn">Apply</button>
+        <button class="btn-icon style-delete-btn" title="Delete style">✕</button>
+      </div>
+      <div class="style-card-tags">${fieldTags.map(t => `<span class="style-tag">${escapeHtml(t)}</span>`).join('')}</div>
+      ${preview ? `<div class="style-card-preview">${escapeHtml(preview)}</div>` : ''}
+    `;
+
+    card.querySelector('.style-apply-btn').addEventListener('click', () => {
+      applyStyle(style);
+      closeStyleBrowser();
+    });
+    card.querySelector('.style-delete-btn').addEventListener('click', () => {
+      deleteStyle(style.id);
+    });
+
+    list.appendChild(card);
+  });
+}
+
+function applyStyle(style) {
+  if ('prompt' in style) {
+    const el = activePromptEl();
+    if (el) el.value = style.prompt;
+  }
+  if ('negative_prompt' in style) {
+    const el = activeNegativeEl();
+    if (el) el.value = style.negative_prompt;
+  }
+  if ('sampler' in style) {
+    const opt = Array.from($('sel-sampler').options).find(o => o.value === style.sampler);
+    if (opt) $('sel-sampler').value = style.sampler;
+  }
+  if ('steps' in style) {
+    $('range-steps').value     = style.steps;
+    $('val-steps').textContent = String(style.steps);
+  }
+  if ('width'  in style) $('inp-width').value  = style.width;
+  if ('height' in style) $('inp-height').value = style.height;
+  if ('hires_enabled' in style) {
+    $('t2i-hires').checked             = style.hires_enabled;
+    $('hires-params').style.display    = style.hires_enabled ? 'flex' : 'none';
+    if ('hires_scale'    in style) { $('range-hires-scale').value   = style.hires_scale;   $('val-hires-scale').textContent   = style.hires_scale.toFixed(1); }
+    if ('hires_denoise'  in style) { $('range-hires-denoise').value = style.hires_denoise; $('val-hires-denoise').textContent = style.hires_denoise.toFixed(2); }
+    if ('hires_upscaler' in style) $('sel-hires-upscaler').value = style.hires_upscaler;
+    if ('hires_steps'    in style) $('inp-hires-steps').value     = style.hires_steps;
+  }
+  if ('detailer_enabled' in style) {
+    $('t2i-detailer').checked              = style.detailer_enabled;
+    $('detailer-params').style.display     = style.detailer_enabled ? 'flex' : 'none';
+    if ('detailer_model'    in style) $('sel-detailer-model').value            = style.detailer_model;
+    if ('detailer_strength' in style) { $('range-detailer-strength').value     = style.detailer_strength; $('val-detailer-strength').textContent = style.detailer_strength.toFixed(2); }
+    if ('detailer_conf'     in style) { $('range-detailer-conf').value         = style.detailer_conf;     $('val-detailer-conf').textContent     = style.detailer_conf.toFixed(2); }
+    if ('detailer_steps'    in style) $('inp-detailer-steps').value            = style.detailer_steps;
+    if ('detailer_res'      in style) $('inp-detailer-res').value              = style.detailer_res;
+  }
+  toast('Style applied: ' + style.name, 'success');
+  Log.info('Styles', 'Applied style: ' + style.name);
+}
+
+function deleteStyle(id) {
+  state.styles = state.styles.filter(s => s.id !== id);
+  saveStyles();
+  renderStyleBrowser();
+  toast('Style deleted', 'info');
 }
 
 function updateLoopBtn() {
@@ -1730,8 +1907,10 @@ function initEvents() {
   $('modal-fs-close').addEventListener('click', closeFullscreen);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if ($('modal-fs').style.display  !== 'none') { closeFullscreen();    return; }
-      if ($('modal').style.display     !== 'none') { closeModal();         return; }
+      if ($('modal-fs').style.display      !== 'none') { closeFullscreen();    return; }
+      if ($('modal').style.display         !== 'none') { closeModal();         return; }
+      if ($('style-save-dialog').style.display !== 'none') { closeSaveStyleDialog(); return; }
+      if ($('styles-browser').style.display    !== 'none') { closeStyleBrowser();    return; }
       if ($('media-lightbox').style.display !== 'none') { showMediaGridView(); return; }
       closeMediaBrowser();
     }
@@ -1758,6 +1937,7 @@ function initEvents() {
     wildcards: () => openWildcardsPanel(),
     media:     () => openMediaBrowser(),
     history:   () => openHistoryPanel(),
+    styles:    () => openStyleBrowser(),
     log:       () => $('btn-log-panel').click(),
   };
   $('btn-kebab').addEventListener('click', e => {
@@ -1775,6 +1955,17 @@ function initEvents() {
   document.addEventListener('click', e => {
     if (!e.target.closest('.kebab-wrap')) $('kebab-menu').style.display = 'none';
   });
+
+  // Styles
+  $('btn-styles').addEventListener('click', openStyleBrowser);
+  $('btn-save-style').addEventListener('click', openSaveStyleDialog);
+  $$('.btn-save-style-tab').forEach(btn => btn.addEventListener('click', openSaveStyleDialog));
+  $('style-save-close').addEventListener('click', closeSaveStyleDialog);
+  $('style-save-cancel').addEventListener('click', closeSaveStyleDialog);
+  $('style-save-confirm').addEventListener('click', confirmSaveStyle);
+  $('style-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmSaveStyle(); });
+  $('styles-browser-close').addEventListener('click', closeStyleBrowser);
+  $('styles-browser-overlay').addEventListener('click', closeStyleBrowser);
 
   // Wildcards panel
   $('btn-wildcards').addEventListener('click', openWildcardsPanel);
@@ -1936,6 +2127,7 @@ function escapeHtml(str) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadHistory();
+  loadStyles();
   initModalZoom();
   const saveCb = $('save-to-disk');
   if (saveCb) {
@@ -1945,4 +2137,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobile();
   initEvents();
   connect();
+
 });

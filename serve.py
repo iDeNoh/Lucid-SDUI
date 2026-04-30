@@ -1,5 +1,5 @@
 """
-SDNext UI proxy server
+Lucid-SDUI proxy server
 - Serves index.html / style.css / app.js on http://localhost:8080
 - Forwards all /sdapi/ requests to SDNext at http://localhost:7860
   so the browser sees everything as same-origin (no CORS issues)
@@ -512,7 +512,7 @@ if __name__ == '__main__':
     except Exception:
         lan_ip = '(unknown)'
 
-    print(f'SDNext UI  ->  http://localhost:{PORT}')
+    print(f'Lucid-SDUI ->  http://localhost:{PORT}')
     print(f'             http://{lan_ip}:{PORT}  (LAN)')
     print(f'SDNext API ->  {API_TARGET}')
     print('Press Ctrl+C to stop\n')
