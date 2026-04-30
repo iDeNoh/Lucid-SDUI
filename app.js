@@ -540,7 +540,8 @@ async function generate() {
       negative_prompt: $('t2i-negative').value,
     };
     if ($('t2i-hires').checked) {
-      params.enable_hr               = true;
+      params.enable_hr             = true;
+      params.hr_force              = true;
       params.hr_scale              = +$('range-hires-scale').value;
       params.hr_denoising_strength = +$('range-hires-denoise').value;
       params.hr_upscaler           = $('sel-hires-upscaler').value;
