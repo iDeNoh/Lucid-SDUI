@@ -853,6 +853,8 @@ async function newWildcardFolder() {
 
 // ===== Styles =====
 
+let _editingStyleId = null;
+
 async function loadStyles() {
   try {
     const r = await fetch('/styles');
@@ -870,9 +872,25 @@ async function saveStyles() {
   } catch (e) { Log.warn('Styles', 'Failed to save styles', e.message); }
 }
 
-function openSaveStyleDialog() {
-  $('style-name-input').value = '';
-  clearStyleThumb();
+function openSaveStyleDialog(editStyle = null) {
+  _editingStyleId = editStyle ? editStyle.id : null;
+
+  $('style-save-header-label').textContent = editStyle ? 'Edit Style' : 'Save Style';
+  $('style-save-confirm').textContent      = editStyle ? 'Update Style' : 'Save Style';
+
+  $('style-name-input').value = editStyle ? editStyle.name : '';
+
+  if (editStyle?.thumb) setStyleThumb(editStyle.thumb);
+  else clearStyleThumb();
+
+  $('sc-prompt').checked     = editStyle ? 'prompt'           in editStyle : true;
+  $('sc-negative').checked   = editStyle ? 'negative_prompt'  in editStyle : true;
+  $('sc-sampler').checked    = editStyle ? 'sampler'          in editStyle : false;
+  $('sc-steps').checked      = editStyle ? 'steps'            in editStyle : false;
+  $('sc-resolution').checked = editStyle ? 'width'            in editStyle : false;
+  $('sc-hires').checked      = editStyle ? 'hires_enabled'    in editStyle : false;
+  $('sc-detailer').checked   = editStyle ? 'detailer_enabled' in editStyle : false;
+
   $('style-save-dialog').style.display = 'flex';
   setTimeout(() => $('style-name-input').focus(), 50);
 }
@@ -898,7 +916,24 @@ function confirmSaveStyle() {
   if (!name) { toast('Enter a name for this style', 'warn'); $('style-name-input').focus(); return; }
 
   const thumbSrc = $('style-thumb-img').src;
-  const style = { id: Date.now(), name, thumb: thumbSrc || null };
+  const isEdit = _editingStyleId != null;
+
+  let style;
+  if (isEdit) {
+    style = state.styles.find(s => s.id === _editingStyleId);
+    if (!style) { toast('Style not found', 'warn'); return; }
+    // Clear all captured fields before re-writing from current checkboxes
+    ['prompt','negative_prompt','sampler','steps','width','height',
+     'hires_enabled','hires_scale','hires_denoise','hires_upscaler','hires_steps',
+     'detailer_enabled','detailer_model','detailer_strength','detailer_conf','detailer_steps','detailer_res']
+      .forEach(k => delete style[k]);
+  } else {
+    style = { id: Date.now() };
+    state.styles.unshift(style);
+  }
+
+  style.name  = name;
+  style.thumb = thumbSrc || null;
 
   if ($('sc-prompt').checked) {
     const el = activePromptEl();
@@ -930,11 +965,12 @@ function confirmSaveStyle() {
     style.detailer_res      = +$('inp-detailer-res').value;
   }
 
-  state.styles.unshift(style);
+  _editingStyleId = null;
   saveStyles();
   closeSaveStyleDialog();
-  toast('Style saved: ' + name, 'success');
-  Log.info('Styles', 'Saved style: ' + name);
+  renderStyleBrowser();
+  toast((isEdit ? 'Style updated: ' : 'Style saved: ') + name, 'success');
+  Log.info('Styles', (isEdit ? 'Updated style: ' : 'Saved style: ') + name);
 }
 
 function openStyleBrowser() {
@@ -983,6 +1019,7 @@ function renderStyleBrowser() {
           ${preview ? `<div class="style-card-preview">${escapeHtml(preview)}</div>` : ''}
         </div>
         <button class="btn-sm btn-secondary style-apply-btn">Apply</button>
+        <button class="btn-sm btn-ghost style-edit-btn">Edit</button>
         <button class="btn-icon style-delete-btn" title="Delete style">✕</button>
       </div>
     `;
@@ -990,6 +1027,9 @@ function renderStyleBrowser() {
     card.querySelector('.style-apply-btn').addEventListener('click', () => {
       applyStyle(style);
       closeStyleBrowser();
+    });
+    card.querySelector('.style-edit-btn').addEventListener('click', () => {
+      openSaveStyleDialog(style);
     });
     card.querySelector('.style-delete-btn').addEventListener('click', () => {
       deleteStyle(style.id);
