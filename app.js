@@ -541,10 +541,11 @@ async function generate() {
     };
     if ($('t2i-hires').checked) {
       params.enable_hr               = true;
-      params.hr_scale                = +$('range-hires-scale').value;
-      params.hr_denoising_strength   = +$('range-hires-denoise').value;
-      params.hr_upscaler             = $('sel-hires-upscaler').value;
-      params.hr_second_pass_steps    = +$('inp-hires-steps').value;
+      params.hr_scale              = +$('range-hires-scale').value;
+      params.hr_denoising_strength = +$('range-hires-denoise').value;
+      params.hr_upscaler           = $('sel-hires-upscaler').value;
+      const hrSteps = +$('inp-hires-steps').value;
+      if (hrSteps > 0) params.hr_second_pass_steps = hrSteps;
     }
     if ($('t2i-detailer').checked && $('sel-detailer-model').value) {
       params.detailer_enabled    = true;
