@@ -289,6 +289,67 @@ select option  { background: var(--bg-card); }
 .field-group > input { width: 100%; }
 
 /* LoRA */
+/* ===== Networks browser ===== */
+
+.net-tabs {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  background: var(--bg-panel);
+  padding: 3px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+}
+.net-tab {
+  flex: 1;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--r-lg) - 2px);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.net-tab:hover  { color: var(--text); background: var(--bg-hover); }
+.net-tab.active { background: var(--accent); color: #fff; }
+#btn-refresh-networks { margin-left: 2px; flex-shrink: 0; }
+
+.net-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.net-list::-webkit-scrollbar { width: 4px; }
+.net-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.net-item {
+  padding: 6px 8px;
+  background: var(--bg-ctrl);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.net-item:hover   { border-color: var(--accent-dim); }
+.net-item.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.net-item.loading { opacity: 0.6; pointer-events: none; }
+
+.net-item-main { display: flex; align-items: center; gap: 6px; }
+.net-item-name {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.net-item-meta { font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+
+/* ===== LoRA list (used in Networks panel) ===== */
 .lora-list {
   display: flex;
   flex-direction: column;
@@ -485,6 +546,8 @@ button {
   flex-shrink: 0;
 }
 .tab-panel.active { display: flex; }
+
+#panel-networks { flex: 1; min-height: 0; }
 
 .tab-panel::-webkit-scrollbar { width: 4px; }
 .tab-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }

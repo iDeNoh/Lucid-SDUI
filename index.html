@@ -87,12 +87,6 @@
         <div id="model-load-status" class="model-status" style="display:none"></div>
       </div>
 
-      <div class="sidebar-section">
-        <label class="section-label">VAE</label>
-        <select id="sel-vae" class="full-width">
-          <option value="">Auto</option>
-        </select>
-      </div>
 
       <div class="sidebar-section">
         <label class="section-label">Sampler</label>
@@ -221,14 +215,6 @@
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <label class="section-label">
-          LoRAs
-          <button id="btn-refresh-loras" class="btn-icon btn-inline" title="Refresh LoRAs">⟳</button>
-        </label>
-        <input type="text" id="lora-search" class="full-width" placeholder="Search LoRAs...">
-        <div id="lora-list" class="lora-list"></div>
-      </div>
 
     </aside>
 
@@ -240,6 +226,7 @@
         <button class="tab" data-tab="img2img">img2img</button>
         <button class="tab" data-tab="video">video</button>
         <button class="tab" data-tab="extras">extras</button>
+        <button class="tab" data-tab="networks">networks</button>
       </div>
 
       <!-- txt2img -->
@@ -388,6 +375,18 @@
           </div>
           <button id="btn-upscale" class="btn-sm btn-secondary full-width">Upscale</button>
         </div>
+      </div>
+
+      <!-- Networks browser -->
+      <div class="tab-panel" id="panel-networks">
+        <div class="net-tabs">
+          <button class="net-tab active" data-net="model">Models</button>
+          <button class="net-tab" data-net="vae">VAE</button>
+          <button class="net-tab" data-net="lora">LoRA</button>
+          <button id="btn-refresh-networks" class="btn-icon" title="Refresh">⟳</button>
+        </div>
+        <input type="text" id="net-search" class="full-width" placeholder="Search…">
+        <div id="net-list" class="net-list"></div>
       </div>
 
       <!-- Live preview shown while generating -->

@@ -195,6 +195,11 @@ const state = {
   wcCurrentPath: null,
   wcDirty:       false,
   styles:        [],
+  networkTab:    'lora',
+  allModels:     [],
+  allVAEs:       [],
+  selectedVAE:   '',
+  currentModel:  '',
 };
 
 // ===== Modal zoom/pan state =====
@@ -366,16 +371,23 @@ async function loadAll() {
     api.getDetailers(),
   ]);
 
-  if (models.status === 'fulfilled')    populateModels(models.value, options.value?.sd_model_checkpoint);
+  if (models.status === 'fulfilled') {
+    state.allModels   = models.value;
+    state.currentModel = options.value?.sd_model_checkpoint || '';
+    populateModels(models.value, state.currentModel);
+  }
   if (samplers.status === 'fulfilled')  populateSamplers(samplers.value, options.value?.sampler_name);
-  if (vaes.status === 'fulfilled')      populateVAEs(vaes.value, options.value?.sd_vae);
+  if (vaes.status === 'fulfilled') {
+    state.allVAEs    = vaes.value;
+    state.selectedVAE = options.value?.sd_vae || '';
+  }
   if (upscalers.status === 'fulfilled') populateUpscalers(upscalers.value);
   if (detailers.status === 'fulfilled') populateDetailers(detailers.value);
   else Log.warn('API', 'Could not fetch detailers', detailers.reason?.message);
 
   if (options.status === 'fulfilled') ensureLivePreviews(options.value);
 
-  loadLoras();
+  loadNetworks();
 }
 
 async function ensureLivePreviews(opts) {
@@ -418,15 +430,6 @@ function populateSamplers(samplers, current) {
   }
 }
 
-function populateVAEs(vaes, current) {
-  const sel = $('sel-vae');
-  while (sel.options.length > 1) sel.remove(1);
-  vaes.forEach(v => {
-    const o = new Option(v.model_name, v.model_name);
-    if (v.model_name === current) o.selected = true;
-    sel.add(o);
-  });
-}
 
 function populateDetailers(detailers) {
   const sel = $('sel-detailer-model');
@@ -445,39 +448,103 @@ function populateUpscalers(upscalers) {
   });
 }
 
-async function loadLoras() {
+// ===== Networks browser =====
+
+async function loadNetworks() {
   try {
     const loras = await api.getLoras();
     state.allLoras = loras;
-    renderLoras(loras);
-  } catch { /* LoRAs unavailable */ }
+  } catch { /* unavailable */ }
+  renderNetworks();
 }
 
-function renderLoras(loras) {
-  const list = $('lora-list');
+function renderNetworks() {
+  const list   = $('net-list');
+  const search = ($('net-search').value || '').toLowerCase();
   list.innerHTML = '';
-  loras.forEach(lora => {
-    const item = document.createElement('div');
-    item.className = 'lora-item';
-    item.dataset.name = lora.name.toLowerCase();
-    item.innerHTML = `
-      <span class="lora-name" title="${lora.path || lora.name}">${lora.name}</span>
-      <div class="lora-controls">
-        <input type="range" class="lora-weight" min="-2" max="2" step="0.05" value="0.8">
-        <span class="lora-weight-val">0.80</span>
-        <button class="btn-icon btn-lora-add" title="Inject into prompt" style="
-          width:20px;height:20px;font-size:13px;
-          background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);
-        ">+</button>
-      </div>`;
-    const slider = item.querySelector('.lora-weight');
-    const val    = item.querySelector('.lora-weight-val');
-    slider.addEventListener('input', () => { val.textContent = (+slider.value).toFixed(2); });
-    item.querySelector('.btn-lora-add').addEventListener('click', () => {
-      injectLora(lora.name, +slider.value);
+
+  if (state.networkTab === 'model') {
+    state.allModels
+      .filter(m => !search || m.title.toLowerCase().includes(search))
+      .forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'net-item' + (m.title === state.currentModel ? ' current' : '');
+        item.innerHTML = `
+          <div class="net-item-main">
+            <span class="net-item-name" title="${escapeHtml(m.title)}">${escapeHtml(m.title.split('/').pop().split('\\').pop())}</span>
+            <span class="net-item-meta">${m.type || ''}</span>
+          </div>`;
+        item.addEventListener('click', () => loadNetworkModel(m.title, item));
+        list.appendChild(item);
+      });
+
+  } else if (state.networkTab === 'vae') {
+    const autoItem = document.createElement('div');
+    autoItem.className = 'net-item' + (!state.selectedVAE ? ' current' : '');
+    autoItem.innerHTML = '<div class="net-item-main"><span class="net-item-name">Auto</span></div>';
+    autoItem.addEventListener('click', () => {
+      state.selectedVAE = '';
+      renderNetworks();
+      toast('VAE set to Auto', 'info');
     });
-    list.appendChild(item);
-  });
+    list.appendChild(autoItem);
+
+    state.allVAEs
+      .filter(v => !search || v.model_name.toLowerCase().includes(search))
+      .forEach(v => {
+        const item = document.createElement('div');
+        item.className = 'net-item' + (v.model_name === state.selectedVAE ? ' current' : '');
+        item.innerHTML = `<div class="net-item-main"><span class="net-item-name" title="${escapeHtml(v.model_name)}">${escapeHtml(v.model_name)}</span></div>`;
+        item.addEventListener('click', () => {
+          state.selectedVAE = v.model_name;
+          renderNetworks();
+          toast('VAE: ' + v.model_name, 'info');
+        });
+        list.appendChild(item);
+      });
+
+  } else {
+    state.allLoras
+      .filter(l => !search || l.name.toLowerCase().includes(search))
+      .forEach(lora => {
+        const item = document.createElement('div');
+        item.className = 'lora-item';
+        item.dataset.name = lora.name.toLowerCase();
+        item.innerHTML = `
+          <span class="lora-name" title="${escapeHtml(lora.path || lora.name)}">${escapeHtml(lora.name)}</span>
+          <div class="lora-controls">
+            <input type="range" class="lora-weight" min="-2" max="2" step="0.05" value="0.8">
+            <span class="lora-weight-val">0.80</span>
+            <button class="btn-icon btn-lora-add" title="Inject into prompt">+</button>
+          </div>`;
+        const slider = item.querySelector('.lora-weight');
+        const val    = item.querySelector('.lora-weight-val');
+        slider.addEventListener('input', () => { val.textContent = (+slider.value).toFixed(2); });
+        item.querySelector('.btn-lora-add').addEventListener('click', () => injectLora(lora.name, +slider.value));
+        list.appendChild(item);
+      });
+  }
+}
+
+async function loadNetworkModel(title, itemEl) {
+  if (state.generating) { toast('Cannot switch model while generating', 'warn'); return; }
+  itemEl.classList.add('loading');
+  const nameShort = title.split('/').pop().split('\\').pop().slice(0, 40);
+  setBusy('Loading model…');
+  try {
+    await api.setCheckpoint(title);
+    state.currentModel = title;
+    toast('Model loaded: ' + nameShort, 'success');
+    setStatus(true);
+    renderNetworks();
+    // Also update sidebar dropdown
+    const sel = $('sel-model');
+    if (sel) sel.value = title;
+  } catch (e) {
+    toast('Model load failed: ' + e.message.slice(0, 60), 'error');
+    setStatus(true);
+  }
+  itemEl.classList.remove('loading');
 }
 
 function injectLora(name, weight) {
@@ -504,7 +571,6 @@ function activeNegativeEl() { return activeTabEl('-negative'); }
 // ===== Generation params =====
 
 function commonParams() {
-  const vae = $('sel-vae').value;
   return {
     sampler_name:      $('sel-sampler').value,
     steps:             +$('range-steps').value,
@@ -516,7 +582,7 @@ function commonParams() {
     n_iter:            +$('inp-batch-count').value,
     save_images:       true,
     send_images:       true,
-    ...(vae ? { override_settings: { sd_vae: vae }, override_settings_restore_afterwards: false } : {}),
+    ...(state.selectedVAE ? { override_settings: { sd_vae: state.selectedVAE }, override_settings_restore_afterwards: false } : {}),
   };
 }
 
@@ -1699,10 +1765,12 @@ async function loadModel() {
 
   try {
     await api.setCheckpoint(model);
+    state.currentModel = model;
     sta.textContent = '✓ Loaded';
     sta.className   = 'model-status ok';
     toast('Model loaded: ' + model.split('/').pop().slice(0, 40), 'success');
     setStatus(true);
+    renderNetworks();
     setTimeout(() => { sta.style.display = 'none'; }, 4000);
   } catch (e) {
     sta.textContent = '✗ ' + e.message.slice(0, 60);
@@ -1976,14 +2044,22 @@ function initEvents() {
   // Model load
   $('btn-load-model').addEventListener('click', loadModel);
 
-  // LoRA refresh + search
-  $('btn-refresh-loras').addEventListener('click', () => { toast('Refreshing LoRAs…', 'info'); loadLoras(); });
-  $('lora-search').addEventListener('input', function () {
-    const q = this.value.toLowerCase();
-    $$('#lora-list .lora-item').forEach(item => {
-      item.style.display = item.dataset.name.includes(q) ? '' : 'none';
+  // Networks browser
+  $$('.net-tab').forEach(btn => btn.addEventListener('click', () => {
+    state.networkTab = btn.dataset.net;
+    $$('.net-tab').forEach(t => t.classList.toggle('active', t === btn));
+    $('net-search').value = '';
+    renderNetworks();
+  }));
+  $('btn-refresh-networks').addEventListener('click', () => {
+    toast('Refreshing networks…', 'info');
+    Promise.allSettled([api.getModels(), api.getVAEs()]).then(([models, vaes]) => {
+      if (models.status === 'fulfilled') { state.allModels = models.value; }
+      if (vaes.status === 'fulfilled')   { state.allVAEs   = vaes.value; }
+      loadNetworks();
     });
   });
+  $('net-search').addEventListener('input', renderNetworks);
 
   // PNG info dropzone
   setupDropzone('pnginfo-dropzone', 'pnginfo-file', null, (f) => handlePNGInfo(f));
